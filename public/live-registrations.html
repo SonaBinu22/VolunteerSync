@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Registrations - VolunteerSync</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="index.html" class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            VolunteerSync
+        </a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="live-registrations.html" class="active">Volunteers</a>
+            <a href="add-volunteer.html">Register Volunteer</a>
+            <a href="admin.html" id="nav-admin-link">Register Admin</a>
+        </div>
+    </nav>
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h1 class="page-title" style="margin-bottom: 0;">Live Volunteer Registrations</h1>
+            <a href="add-volunteer.html" class="btn">+ Register Volunteer</a>
+        </div>
+        
+        <div id="vGrid" class="grid">
+            <p style="color: var(--text-light);">Loading volunteers...</p>
+        </div>
+    </div>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const volunteers = await API.getVolunteers();
+                const grid = document.getElementById('vGrid');
+                if (volunteers.length === 0) {
+                     grid.innerHTML = '<p style="text-align:center; grid-column:1/-1;">No volunteers registered.</p>'; return;
+                }
+                const isGuest = !Auth.getToken();
+                grid.innerHTML = volunteers.map(v => `
+                    <div class="card" style="display:flex; flex-direction:row; gap:1.5rem; align-items:center; text-align:left; flex-wrap:wrap;">
+                        <img src="${v.profilePic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(v.name)}" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:2px solid rgba(255,255,255,0.15); box-shadow: 0 4px 10px rgba(0,0,0,0.3)">
+                        <div style="flex-grow:1; min-width:200px">
+                            <h3 style="margin-bottom:0.5rem; color:var(--text-main); font-family:'Outfit'; font-size:1.35rem;">${v.name}</h3>
+                            <div style="display:flex; flex-wrap:wrap; gap:0.5rem 1rem; font-size:0.85rem; color:var(--text-light); margin-bottom:0.75rem;">
+                                <span>📍 ${v.currentLocation || 'N/A'}</span>
+                                <span>📞 ${isGuest ? '🔒 Login to View' : (v.phone || 'N/A')}</span>
+                                <span>🩸 ${v.bloodGroup || 'N/A'}</span>
+                                <span>👤 ${v.gender || 'N/A'}</span>
+                            </div>
+                            <div style="font-size:0.9rem; margin-bottom:0.25rem;"><strong style="color:var(--text-main)">Skills:</strong> ${v.skills}</div>
+                            <div style="font-size:0.9rem; margin-bottom:0.25rem;"><strong style="color:var(--text-main)">Availability:</strong> ${v.availability}</div>
+                            <div style="font-size:0.85rem; color:var(--text-light); margin-top:0.25rem;"><strong style="color:var(--text-main)">Address:</strong> ${isGuest ? '🔒 Login to View' : (v.address || 'N/A')}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch(e) {
+                document.getElementById('vGrid').innerHTML = '<p style="color:red; text-align:center; grid-column:1/-1;">Error loading volunteers.</p>';
+            }
+        });
+    </script>
+</body>
+</html>

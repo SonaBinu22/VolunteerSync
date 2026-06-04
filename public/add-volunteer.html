@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register Volunteer - VolunteerSync</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="index.html" class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            VolunteerSync
+        </a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="live-registrations.html">Volunteers</a>
+            <a href="add-volunteer.html" class="active">Register Volunteer</a>
+            <a href="admin.html" id="nav-admin-link">Register Admin</a>
+        </div>
+    </nav>
+    <div class="container">
+        <h1 class="page-title" style="text-align: center;">Register as a Volunteer</h1>
+        <div class="form-card">
+            <form id="volunteerForm" class="form-grid">
+                
+                <div class="form-group full-width" style="border-bottom: 2px solid rgba(255,255,255,0.08); padding-bottom:1rem; margin-bottom:1rem;">
+                    <h3 style="font-family:'Outfit'; color:var(--primary); margin-bottom:1rem">Account Credentials</h3>
+                    <div style="display:flex; gap:1rem;">
+                        <input type="text" id="v_username" class="form-control" placeholder="Create Username" required>
+                        <input type="password" id="v_password" class="form-control" placeholder="Create Password" required>
+                    </div>
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label" for="v_name">Full Name *</label>
+                    <input type="text" id="v_name" class="form-control" placeholder="e.g. Jane Doe" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="v_gender">Gender</label>
+                    <select id="v_gender" class="form-control">
+                        <option value="">Select...</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other / Prefer not to say</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="v_blood">Blood Group</label>
+                    <select id="v_blood" class="form-control">
+                        <option value="">Select...</option>
+                        <option value="A+">A+</option><option value="A-">A-</option>
+                        <option value="B+">B+</option><option value="B-">B-</option>
+                        <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                        <option value="O+">O+</option><option value="O-">O-</option>
+                    </select>
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label" for="v_address">Home Address</label>
+                    <input type="text" id="v_address" class="form-control" placeholder="e.g. 123 Main St, Springfield">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="v_location">Current Location / Neighborhood *</label>
+                    <input type="text" id="v_location" class="form-control" placeholder="e.g. Downtown" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="v_phone">Phone Number</label>
+                    <input type="tel" id="v_phone" class="form-control" placeholder="e.g. (555) 123-4567">
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label" for="v_pic">Profile Picture URL (Optional)</label>
+                    <input type="url" id="v_pic" class="form-control" placeholder="https://example.com/my-photo.jpg">
+                    <small style="color:var(--text-light); margin-top:4px; display:block">Leave blank to use an auto-generated premium avatar based on your name.</small>
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label" for="v_skills">Skills (comma separated) *</label>
+                    <input type="text" id="v_skills" class="form-control" placeholder="e.g. Nursing, Driving, Heavy Lifting" required>
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label" for="v_availability">Availability *</label>
+                    <input type="text" id="v_availability" class="form-control" placeholder="e.g. Weekends, Evenings" required>
+                </div>
+                
+                <div class="full-width">
+                    <button type="submit" class="btn btn-full">Submit Volunteer Registration</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        document.getElementById('volunteerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                username: document.getElementById('v_username').value,
+                password: document.getElementById('v_password').value,
+                name: document.getElementById('v_name').value,
+                skills: document.getElementById('v_skills').value,
+                availability: document.getElementById('v_availability').value,
+                location: document.getElementById('v_location').value,
+                address: document.getElementById('v_address').value,
+                phone: document.getElementById('v_phone').value,
+                bloodGroup: document.getElementById('v_blood').value,
+                gender: document.getElementById('v_gender').value,
+                profilePic: document.getElementById('v_pic').value,
+                currentLocation: document.getElementById('v_location').value
+            };
+
+            try {
+                await API.registerVolunteer(payload);
+                alert("Volunteer Account created successfully! Please Login now.");
+                window.location.href = "index.html"; // direct to unified login
+            } catch (err) {
+                console.error(err);
+                alert("Failed to register volunteer. " + (err.message || ''));
+            }
+        });
+    </script>
+</body>
+</html>

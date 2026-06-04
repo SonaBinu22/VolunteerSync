@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile - VolunteerSync</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="index.html" class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            VolunteerSync
+        </a>
+        <div class="nav-links">
+            <!-- Dynamically injected via auth.js -->
+        </div>
+    </nav>
+    <div class="container">
+        <h1 class="page-title" style="text-align: center;">Volunteer Profile Setup</h1>
+        
+        <div class="form-card" id="profileWrapper" style="display:none;">
+            <form id="profileForm" class="form-grid">
+                <div class="form-group full-width" style="text-align:center; border-bottom: 2px solid rgba(255,255,255,0.08); padding-bottom:1.5rem; margin-bottom:1.5rem; display:flex; flex-direction:column; align-items:center; gap:0.75rem;">
+                    <img id="displayAvatar" src="" style="width:90px; height:90px; border-radius:50%; object-fit:cover; border:3px solid rgba(255,255,255,0.15); box-shadow: 0 4px 10px rgba(0,0,0,0.3)">
+                    <h3 style="color:var(--text-main); font-family:'Outfit'">Account: <span id="displayUsername" style="color:var(--primary)"></span></h3>
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label" for="vName">Full Name *</label>
+                    <input type="text" id="vName" class="form-control" required placeholder="e.g. Jane Doe">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="vGender">Gender</label>
+                    <select id="vGender" class="form-control">
+                        <option value="">Select...</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other / Prefer not to say</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="vBlood">Blood Group</label>
+                    <select id="vBlood" class="form-control">
+                        <option value="">Select...</option>
+                        <option value="A+">A+</option><option value="A-">A-</option>
+                        <option value="B+">B+</option><option value="B-">B-</option>
+                        <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                        <option value="O+">O+</option><option value="O-">O-</option>
+                    </select>
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label" for="vAddress">Home Address</label>
+                    <input type="text" id="vAddress" class="form-control" placeholder="e.g. 123 Main St, Springfield">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="vLocation">Current Location / Neighborhood *</label>
+                    <input type="text" id="vLocation" class="form-control" placeholder="e.g. Downtown" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="vPhone">Phone Number</label>
+                    <input type="tel" id="vPhone" class="form-control" placeholder="e.g. (555) 123-4567">
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label" for="vPic">Profile Picture URL</label>
+                    <input type="url" id="vPic" class="form-control" placeholder="https://example.com/photo.jpg">
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label" for="vSkills">Skills (comma separated) *</label>
+                    <input type="text" id="vSkills" class="form-control" required placeholder="e.g. Nursing, Driving, Cooking">
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label" for="vAvailability">Availability *</label>
+                    <input type="text" id="vAvailability" class="form-control" required placeholder="e.g. Weekends, Evenings">
+                </div>
+
+                <div class="full-width" style="display:flex; gap:1rem; margin-top:1rem;">
+                    <button type="submit" class="btn btn-full">Save Changes</button>
+                    <button type="button" onclick="Auth.logout()" class="btn btn-full" style="background-color: #ef4444; color:white; border:none; box-shadow:none;">Logout Account</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="unauthMessage" style="text-align:center; padding: 2.5rem; display:none;">
+             <h2 style="margin-bottom:1rem;">Access Restricted</h2>
+             <p style="color:var(--text-light)">Please <a href="index.html" style="color:var(--primary); font-weight:600">login as a volunteer</a> to configure your profile details.</p>
+        </div>
+    </div>
+    
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!Auth.isVolunteer()) {
+                document.getElementById('profileWrapper').style.display = 'none';
+                document.getElementById('unauthMessage').style.display = 'block';
+                return;
+            }
+            document.getElementById('profileWrapper').style.display = 'block';
+            document.getElementById('unauthMessage').style.display = 'none';
+            try {
+                const profile = await API.getVolunteerProfile();
+                document.getElementById('displayAvatar').src = profile.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name)}&background=random`;
+                document.getElementById('displayUsername').innerText = profile.username;
+                document.getElementById('vName').value = profile.name || '';
+                document.getElementById('vGender').value = profile.gender || '';
+                document.getElementById('vBlood').value = profile.bloodGroup || '';
+                document.getElementById('vAddress').value = profile.address || '';
+                document.getElementById('vLocation').value = profile.currentLocation || '';
+                document.getElementById('vPhone').value = profile.phone || '';
+                document.getElementById('vPic').value = profile.profilePic || '';
+                document.getElementById('vSkills').value = profile.skills || '';
+                document.getElementById('vAvailability').value = profile.availability || '';
+            } catch(e) { console.error(e); }
+        });
+
+        document.getElementById('profileForm').addEventListener('submit', async (e) => {
+             e.preventDefault();
+             try {
+                 const updated = await API.updateVolunteerProfile({
+                     name: document.getElementById('vName').value,
+                     gender: document.getElementById('vGender').value,
+                     bloodGroup: document.getElementById('vBlood').value,
+                     address: document.getElementById('vAddress').value,
+                     currentLocation: document.getElementById('vLocation').value,
+                     phone: document.getElementById('vPhone').value,
+                     profilePic: document.getElementById('vPic').value,
+                     skills: document.getElementById('vSkills').value,
+                     availability: document.getElementById('vAvailability').value
+                 });
+                 // Live update avatar preview
+                 document.getElementById('displayAvatar').src = updated.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(updated.name)}&background=random`;
+                 alert('Volunteer Profile Saved Successfully!');
+                 window.location.href = "dashboard.html";
+             } catch(e) { alert(e.message); }
+        });
+    </script>
+</body>
+</html>

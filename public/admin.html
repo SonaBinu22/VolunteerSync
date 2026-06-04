@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Access - VolunteerSync</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="index.html" class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            VolunteerSync
+        </a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="live-registrations.html">Volunteers</a>
+            <a href="add-volunteer.html">Register Volunteer</a>
+            <a href="admin.html" class="active" id="nav-admin-link">Register Admin</a>
+        </div>
+    </nav>
+    <div class="container">
+        <h1 class="page-title" style="text-align: center;">Administrator Portal</h1>
+        <div class="form-card" id="loginWrapper">
+            <p style="margin-bottom: 1rem; color: var(--text-light); text-align: center;">Current admins can login. Default admin: <b>admin</b> / <b>password123</b></p>
+            <form id="adminForm">
+                <div class="form-group">
+                    <label class="form-label" for="username">Username</label>
+                    <input type="text" id="username" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <input type="password" id="password" class="form-control" required>
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                     <button type="button" class="btn btn-full" id="btnLogin">Login</button>
+                     <button type="button" class="btn btn-full" id="btnRegister" style="background-color: white; color: var(--primary); border: 2px solid var(--primary);">Register</button>
+                </div>
+            </form>
+        </div>
+        
+        <div id="loggedInWrapper" style="display:none; text-align:center; padding: 2rem;">
+            <h2>You are logged in!</h2>
+            <p style="margin-bottom: 1.5rem;">You have admin permissions to create tasks.</p>
+            <button onclick="Auth.logout()" class="btn btn-full" style="background-color: #ef4444; border:none; color:white; max-width:200px;">Logout</button>
+        </div>
+    </div>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+             if (Auth.isAdmin()) {
+                 document.getElementById('loginWrapper').style.display = 'none';
+                 document.getElementById('loggedInWrapper').style.display = 'block';
+             }
+        });
+
+        const u = document.getElementById('username');
+        const p = document.getElementById('password');
+        
+        document.getElementById('btnLogin').addEventListener('click', async () => {
+            if(!u.value || !p.value) return alert("Fill form");
+            try {
+                const res = await API.universalLogin(u.value, p.value, 'admin');
+                Auth.setAuth(res.token, res.role);
+                alert("Logged in!");
+                window.location.href = 'dashboard.html';
+            } catch(e) { alert(e.message); }
+        });
+
+        document.getElementById('btnRegister').addEventListener('click', async () => {
+             if(!u.value || !p.value) return alert("Fill form");
+             try {
+                await API.registerAdmin(u.value, p.value);
+                alert("Registered successfully! You can now click Login button.");
+            } catch(e) { alert(e.message); }
+        });
+    </script>
+</body>
+</html>

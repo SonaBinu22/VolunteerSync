@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Community Need - VolunteerSync</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="index.html" class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            VolunteerSync
+        </a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="live-registrations.html">Volunteers</a>
+            <a href="add-volunteer.html">Register Volunteer</a>
+            <a href="admin.html" id="nav-admin-link">Register Admin</a>
+        </div>
+    </nav>
+    <div class="container">
+        <h1 class="page-title" style="text-align: center;">Add Community Task (Admin Only)</h1>
+        
+        <div class="form-card" id="formWrapper" style="display: none;">
+            <form id="needForm" class="form-grid">
+                <div class="form-group full-width">
+                    <label class="form-label" for="title">Title of the Need</label>
+                    <input type="text" id="title" class="form-control" placeholder="e.g. Park Clean-up" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="location">Macro Location (Neighborhood)</label>
+                    <input type="text" id="location" class="form-control" placeholder="e.g. Centennial Park" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="reqCount">Volunteers Required</label>
+                    <input type="number" id="reqCount" class="form-control" placeholder="e.g. 3" required min="1" value="1">
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label" for="taskDetails">Specific Task Location Details</label>
+                    <input type="text" id="taskDetails" class="form-control" placeholder="e.g. Meet at the gazebo near the north entrance" required>
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label" for="description">Detailed Description</label>
+                    <textarea id="description" class="form-control" placeholder="Describe what needs to be done, when, and any specific requirements. Gemini AI will analyze this to assign urgency and skills." required></textarea>
+                </div>
+                <div class="full-width">
+                    <button type="submit" class="btn btn-full">Submit Need & Analyze via AI</button>
+                </div>
+            </form>
+        </div>
+        <div id="unauthMessage" style="text-align:center; padding: 2rem;">
+             <h2>Unauthorized Access</h2>
+             <p>Only verified administrators can add new community needs. Please <a href="admin.html" style="color:var(--primary); font-weight:600;">login here as an admin</a> to access this tool.</p>
+        </div>
+    </div>
+    <div id="globalSpinner" class="spinner-container">
+        <div class="spinner"></div>
+        <div id="spinnerText" style="font-weight: 500; color: var(--text-main);">AI is analyzing the need...</div>
+    </div>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (Auth.isAdmin()) {
+                document.getElementById('formWrapper').style.display = 'block';
+                document.getElementById('unauthMessage').style.display = 'none';
+            }
+        });
+
+        document.getElementById('needForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('title').value;
+            const location = document.getElementById('location').value;
+            const description = document.getElementById('description').value;
+            const taskLocationDetails = document.getElementById('taskDetails').value;
+            const requiredVolunteerCount = document.getElementById('reqCount').value;
+
+            showSpinner("Gemini AI is analyzing the need (determining urgency and skills)...");
+            
+            try {
+                await API.addNeed({ title, location, description, taskLocationDetails, requiredVolunteerCount });
+                alert("Need added successfully! Returning to dashboard.");
+                window.location.href = "dashboard.html";
+            } catch (err) {
+                console.error(err);
+                alert("Failed to add need. " + (err.message || ''));
+            } finally {
+                hideSpinner();
+            }
+        });
+    </script>
+</body>
+</html>

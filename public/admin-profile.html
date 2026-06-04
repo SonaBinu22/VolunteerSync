@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Profile - VolunteerSync</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="index.html" class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            VolunteerSync
+        </a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="live-registrations.html">Volunteers</a>
+            <a href="add-volunteer.html">Register Volunteer</a>
+            <a href="admin.html" id="nav-admin-link">Register Admin</a>
+        </div>
+    </nav>
+    <div class="container">
+        <h1 class="page-title" style="text-align: center;">Administrator Profile Setup</h1>
+        <div class="form-card" id="profileWrapper" style="display:none;">
+            <form id="profileForm" class="form-grid">
+                <div class="form-group full-width" style="text-align:center;">
+                    <h3 style="color:var(--secondary); font-family:'Outfit'">Account: <span id="displayUsername" style="color:var(--primary)"></span></h3>
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label" for="adminName">Full Name</label>
+                    <input type="text" id="adminName" class="form-control" placeholder="Jane Doe">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="adminEmail">Email Address</label>
+                    <input type="email" id="adminEmail" class="form-control" placeholder="jane@example.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="adminPhone">Phone Number</label>
+                    <input type="tel" id="adminPhone" class="form-control" placeholder="(555) 123-4567">
+                </div>
+                <div class="full-width" style="display:flex; gap:1rem;">
+                    <button type="submit" class="btn btn-full">Save Profile</button>
+                    <button type="button" onclick="Auth.logout()" class="btn btn-full" style="background-color: #ef4444; color:white; border:none;">Logout System</button>
+                </div>
+            </form>
+        </div>
+        <div id="unauthMessage" style="text-align:center; padding: 2rem;">
+             <h2>Not Logged In</h2>
+             <p>Please <a href="admin.html">login</a>.</p>
+        </div>
+    </div>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!Auth.isAdmin()) {
+                document.getElementById('profileWrapper').style.display = 'none';
+                document.getElementById('unauthMessage').style.display = 'block';
+                return;
+            }
+            document.getElementById('profileWrapper').style.display = 'block';
+            document.getElementById('unauthMessage').style.display = 'none';
+            try {
+                const profile = await API.getAdminProfile();
+                document.getElementById('displayUsername').innerText = profile.username;
+                document.getElementById('adminName').value = profile.name || '';
+                document.getElementById('adminEmail').value = profile.email || '';
+                document.getElementById('adminPhone').value = profile.phone || '';
+            } catch(e) { console.error(e); }
+        });
+
+        document.getElementById('profileForm').addEventListener('submit', async (e) => {
+             e.preventDefault();
+             try {
+                 await API.updateAdminProfile({
+                     name: document.getElementById('adminName').value,
+                     email: document.getElementById('adminEmail').value,
+                     phone: document.getElementById('adminPhone').value,
+                 });
+                 alert('Profile Updated Successfully!');
+                 window.location.href = "dashboard.html";
+             } catch(e) { alert(e.message); }
+        });
+    </script>
+</body>
+</html>

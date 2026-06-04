@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome - VolunteerSync</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container" style="max-width: 500px; text-align: center; margin-top: 5rem;">
+        <h1 class="page-title" style="margin-bottom: 1rem;">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:bottom; color:var(--primary)"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg> 
+            VolunteerSync
+        </h1>
+        <p style="color:var(--text-light); margin-bottom: 2rem; font-size:1.1rem">Please authenticate into the ecosystem.</p>
+        
+        <div class="card" style="padding: 2.5rem; text-align:left;">
+            <div style="display:flex; gap:1rem; margin-bottom:1.5rem; border-bottom: 2px solid rgba(255,255,255,0.08); padding-bottom:1rem;">
+                <button id="tabAdmin" class="btn btn-full" style="margin:0; background:var(--primary); color:white; border:none; box-shadow:0 4px 14px 0 rgba(99, 102, 241, 0.35);">Admin Sign In</button>
+                <button id="tabVol" class="btn btn-full" style="margin:0; background:rgba(255, 255, 255, 0.05); color:var(--text-light); border:1px solid rgba(255, 255, 255, 0.1); box-shadow:none">Volunteer Sign In</button>
+            </div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label class="form-label" id="usernameLabel">Admin Username</label>
+                    <input type="text" id="username" class="form-control" required placeholder="Enter username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" id="password" class="form-control" required placeholder="Enter password">
+                </div>
+                <button type="submit" class="btn btn-full">Sign In</button>
+            </form>
+            
+            <div style="margin-top: 2rem; text-align: center; font-size:0.95rem;">
+                Don't have an account? <br/>
+                <a href="#" id="linkCreateAdmin" style="color:var(--primary); font-weight:600">Sign Up Admin</a> <span style="color:rgba(255,255,255,0.15); margin:0 0.5rem">|</span> 
+                <a href="add-volunteer.html" style="color:var(--primary); font-weight:600">Sign Up Volunteer</a>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        let currentRole = 'admin'; // admin or volunteer
+        
+        document.getElementById('tabAdmin').onclick = () => {
+            currentRole = 'admin';
+            document.getElementById('tabAdmin').style.background = 'var(--primary)';
+            document.getElementById('tabAdmin').style.color = 'white';
+            document.getElementById('tabAdmin').style.border = 'none';
+            document.getElementById('tabAdmin').style.boxShadow = '0 4px 14px 0 rgba(99, 102, 241, 0.35)';
+
+            document.getElementById('tabVol').style.background = 'rgba(255, 255, 255, 0.05)';
+            document.getElementById('tabVol').style.color = 'var(--text-light)';
+            document.getElementById('tabVol').style.border = '1px solid rgba(255, 255, 255, 0.1)';
+            document.getElementById('tabVol').style.boxShadow = 'none';
+
+            document.getElementById('usernameLabel').innerText = 'Admin Username';
+        };
+        
+        document.getElementById('tabVol').onclick = () => {
+            currentRole = 'volunteer';
+            document.getElementById('tabVol').style.background = 'var(--primary)';
+            document.getElementById('tabVol').style.color = 'white';
+            document.getElementById('tabVol').style.border = 'none';
+            document.getElementById('tabVol').style.boxShadow = '0 4px 14px 0 rgba(99, 102, 241, 0.35)';
+            
+            document.getElementById('tabAdmin').style.background = 'rgba(255, 255, 255, 0.05)';
+            document.getElementById('tabAdmin').style.color = 'var(--text-light)';
+            document.getElementById('tabAdmin').style.border = '1px solid rgba(255, 255, 255, 0.1)';
+            document.getElementById('tabAdmin').style.boxShadow = 'none';
+
+            document.getElementById('usernameLabel').innerText = 'Volunteer Username';
+        };
+
+        document.getElementById('loginForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            try {
+                const res = await API.universalLogin(u, p, currentRole);
+                Auth.setAuth(res.token, res.role);
+                window.location.href = 'dashboard.html';
+            } catch(e) { alert(e.message); }
+        };
+
+        document.getElementById('linkCreateAdmin').onclick = async (e) => {
+            e.preventDefault();
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            if(!u || !p) return alert("Fill username and password fields to register your Admin quickly!");
+            
+            try {
+                await API.registerAdmin(u, p);
+                alert("Registered Admin Successfully! Click 'Sign In' to proceed.");
+            } catch(e) { alert(e.message); }
+        };
+    </script>
+</body>
+</html>
