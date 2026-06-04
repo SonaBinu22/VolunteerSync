@@ -1,3 +1,8 @@
+const fs = require('fs');
+const path = require('path');
+
+const DB_PATH = path.join(__dirname, 'db.json');
+
 const admins = [
     { username: 'admin', password: 'password123', name: 'System Administrator', email: 'admin@volunteersync.local', phone: '555-0199', rating: 4.8, tasksCompleted: 12 }
 ];
@@ -52,8 +57,32 @@ const volunteers = [
     }
 ];
 
+function saveData() {
+    try {
+        fs.writeFileSync(DB_PATH, JSON.stringify({ admins, needs, volunteers }, null, 2), 'utf8');
+    } catch (e) {
+        console.error("Failed to write to db.json", e);
+    }
+}
+
+// Load from db.json if present
+if (fs.existsSync(DB_PATH)) {
+    try {
+        const fileData = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+        if (fileData.admins) admins.splice(0, admins.length, ...fileData.admins);
+        if (fileData.needs) needs.splice(0, needs.length, ...fileData.needs);
+        if (fileData.volunteers) volunteers.splice(0, volunteers.length, ...fileData.volunteers);
+    } catch (e) {
+        console.error("Failed to load db.json, using defaults.", e);
+    }
+} else {
+    // Write defaults to db.json
+    saveData();
+}
+
 module.exports = {
     admins,
     needs,
-    volunteers
+    volunteers,
+    saveData
 };

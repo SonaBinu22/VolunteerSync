@@ -69,8 +69,13 @@
                 </div>
 
                 <div class="form-group full-width">
-                    <label class="form-label" for="vPic">Profile Picture URL</label>
-                    <input type="url" id="vPic" class="form-control" placeholder="https://example.com/photo.jpg">
+                    <label class="form-label">Profile Picture (Drag & Drop or click to upload)</label>
+                    <div id="dropZone" style="border: 2px dashed rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 1.5rem; text-align: center; background: rgba(15, 23, 42, 0.4); cursor: pointer; transition: all 0.3s ease;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:0.5rem; filter: drop-shadow(0 0 4px rgba(99,102,241,0.4))"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        <div id="uploadStatus" style="font-size: 0.9rem; color: var(--text-light); font-weight: 500;">Select an image file, or drag it here</div>
+                        <input type="file" id="v_file" accept="image/*" style="display: none;">
+                        <input type="hidden" id="v_pic">
+                    </div>
                 </div>
 
                 <div class="form-group full-width">
@@ -99,6 +104,52 @@
     <script src="js/auth.js"></script>
     <script src="js/api.js"></script>
     <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('v_file');
+        const picHidden = document.getElementById('v_pic');
+        const uploadStatus = document.getElementById('uploadStatus');
+
+        dropZone.onclick = () => fileInput.click();
+
+        dropZone.ondragover = (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'var(--primary)';
+            dropZone.style.background = 'rgba(99, 102, 241, 0.08)';
+        };
+
+        dropZone.ondragleave = () => {
+            dropZone.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+            dropZone.style.background = 'rgba(15, 23, 42, 0.4)';
+        };
+
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+            dropZone.style.background = 'rgba(15, 23, 42, 0.4)';
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        };
+
+        fileInput.onchange = () => {
+            if (fileInput.files.length > 0) {
+                handleFile(fileInput.files[0]);
+            }
+        };
+
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                return alert('Please select an image file.');
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                picHidden.value = e.target.result;
+                uploadStatus.innerHTML = `✅ <strong>${file.name}</strong> uploaded successfully!`;
+                uploadStatus.style.color = '#10b981';
+            };
+            reader.readAsDataURL(file);
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             if (!Auth.isVolunteer()) {
                 document.getElementById('profileWrapper').style.display = 'none';
@@ -117,7 +168,13 @@
                 document.getElementById('vAddress').value = profile.address || '';
                 document.getElementById('vLocation').value = profile.currentLocation || '';
                 document.getElementById('vPhone').value = profile.phone || '';
-                document.getElementById('vPic').value = profile.profilePic || '';
+                
+                picHidden.value = profile.profilePic || '';
+                if (profile.profilePic) {
+                    uploadStatus.innerHTML = `✅ <strong>Profile Photo</strong> loaded successfully!`;
+                    uploadStatus.style.color = '#10b981';
+                }
+                
                 document.getElementById('vSkills').value = profile.skills || '';
                 document.getElementById('vAvailability').value = profile.availability || '';
             } catch(e) { console.error(e); }
@@ -133,7 +190,7 @@
                      address: document.getElementById('vAddress').value,
                      currentLocation: document.getElementById('vLocation').value,
                      phone: document.getElementById('vPhone').value,
-                     profilePic: document.getElementById('vPic').value,
+                     profilePic: document.getElementById('v_pic').value,
                      skills: document.getElementById('vSkills').value,
                      availability: document.getElementById('vAvailability').value
                  });

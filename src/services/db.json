@@ -1,0 +1,72 @@
+{
+  "admins": [
+    {
+      "username": "admin",
+      "password": "password123",
+      "name": "System Administrator",
+      "email": "admin@volunteersync.local",
+      "phone": "555-0199",
+      "rating": 4.8,
+      "tasksCompleted": 12
+    }
+  ],
+  "needs": [
+    {
+      "id": "1",
+      "title": "Food Drive Distribution",
+      "description": "Need help distributing food boxes to 50 families in the downtown area this weekend.",
+      "location": "Downtown Community Center",
+      "taskLocationDetails": "Inside the main auditorium, entrance on 5th street.",
+      "requiredVolunteerCount": 3,
+      "status": "open",
+      "createdAt": "2026-06-04T18:58:28.891Z",
+      "createdBy": "admin",
+      "requests": [
+        {
+          "username": "v-alice",
+          "status": "pending"
+        }
+      ],
+      "aiAnalysis": {
+        "urgency": "High",
+        "skills": [
+          "Physical Stamina",
+          "Organization",
+          "Communication"
+        ],
+        "reason": "Food distribution is time-sensitive and critical for families in need."
+      },
+      "assignedVolunteers": []
+    }
+  ],
+  "volunteers": [
+    {
+      "username": "v-alice",
+      "password": "password123",
+      "id": "v1",
+      "name": "Alice Johnson",
+      "address": "711 Maple St, Downtown",
+      "phone": "555-0101",
+      "currentLocation": "Downtown",
+      "bloodGroup": "O+",
+      "gender": "Female",
+      "profilePic": "https://ui-avatars.com/api/?name=Alice+Johnson&background=random",
+      "skills": "Organization, Communication, Teaching",
+      "availability": "Weekends"
+    },
+    {
+      "username": "v-bob",
+      "password": "password123",
+      "id": "v2",
+      "name": "Bob Smith",
+      "address": "800 Oak Ave, Northside",
+      "phone": "555-0102",
+      "currentLocation": "Northside",
+      "bloodGroup": "A-",
+      "gender": "Male",
+      "profilePic": "https://ui-avatars.com/api/?name=Bob+Smith&background=random",
+      "skills": "Physical Stamina, Driving, Gardening",
+      "availability": "Saturdays, Evenings"
+    }
+  ]
+}

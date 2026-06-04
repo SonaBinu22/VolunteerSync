@@ -1,10 +1,41 @@
 // Global data map for efficient routing logic:
 let globalAdmins = [];
 let globalVolunteers = [];
+let cachedNeeds = [];
 
 document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('needsGrid')) {
         loadNeeds();
+        
+        // Wire up filter event listeners
+        const searchInput = document.getElementById('searchNeeds');
+        const urgencySelect = document.getElementById('filterUrgency');
+        const statusSelect = document.getElementById('filterStatus');
+        
+        if (searchInput) searchInput.oninput = filterAndRenderNeeds;
+        if (urgencySelect) urgencySelect.onchange = filterAndRenderNeeds;
+        if (statusSelect) statusSelect.onchange = filterAndRenderNeeds;
+    }
+    
+    // Connect to real-time updates via Server-Sent Events (SSE)
+    if (typeof EventSource !== 'undefined') {
+        const eventSource = new EventSource('/api/events');
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'update') {
+                    console.log('Live update received:', data);
+                    if (document.getElementById('needsGrid')) {
+                        loadNeeds();
+                    }
+                    if (document.getElementById('vGrid') && typeof loadVolunteers === 'function') {
+                        loadVolunteers();
+                    }
+                }
+            } catch (e) {
+                console.error('Error parsing SSE event:', e);
+            }
+        };
     }
 });
 
@@ -17,17 +48,95 @@ async function loadNeeds() {
         ]);
         globalAdmins = globalData.admins;
         globalVolunteers = globalData.volunteers;
+        cachedNeeds = needs;
 
         renderRoleBanner(needs);
-
-        if (needs.length === 0) {
-            grid.innerHTML = '<p style="text-align:center; grid-column:1/-1;">No needs reported yet.</p>';
-            return;
-        }
-        grid.innerHTML = needs.map(need => createNeedCard(need)).join('');
+        filterAndRenderNeeds();
     } catch (err) {
-        grid.innerHTML = `<p style="color: red;">Error: ${err.message}</p>`;
+        if (grid) grid.innerHTML = `<p style="color: red;">Error: ${err.message}</p>`;
     }
+}
+
+function filterAndRenderNeeds() {
+    const grid = document.getElementById('needsGrid');
+    if (!grid) return;
+
+    // Get filter inputs if they exist in the HTML
+    const searchVal = document.getElementById('searchNeeds')?.value.toLowerCase() || '';
+    const urgencyVal = document.getElementById('filterUrgency')?.value || '';
+    const statusVal = document.getElementById('filterStatus')?.value || '';
+
+    const filtered = cachedNeeds.filter(need => {
+        const titleMatch = need.title.toLowerCase().includes(searchVal);
+        const descMatch = need.description.toLowerCase().includes(searchVal);
+        const locMatch = need.location.toLowerCase().includes(searchVal);
+        
+        // Match search text against title, description, or location
+        const textMatch = titleMatch || descMatch || locMatch;
+        
+        // Match urgency
+        const urgencyMatch = !urgencyVal || (need.aiAnalysis && need.aiAnalysis.urgency && need.aiAnalysis.urgency.toLowerCase() === urgencyVal.toLowerCase());
+        
+        // Match status
+        const statusMatch = !statusVal || (need.status === statusVal);
+
+        return textMatch && urgencyMatch && statusMatch;
+    });
+
+    if (filtered.length === 0) {
+        grid.innerHTML = '<p style="text-align:center; grid-column:1/-1; color: var(--text-light); margin-top:2rem;">No tasks matching the criteria found.</p>';
+        return;
+    }
+    grid.innerHTML = filtered.map(need => createNeedCard(need)).join('');
+}
+
+function calculateCompatibilityScore(need, volunteer) {
+    if (!need || !volunteer) return 50;
+    
+    let score = 40; // baseline
+    
+    // 1. Skill overlap matching (max +35)
+    const taskSkills = (need.aiAnalysis && need.aiAnalysis.skills) || [];
+    const volSkills = volunteer.skills ? volunteer.skills.split(',').map(s => s.trim().toLowerCase()) : [];
+    
+    let skillMatches = 0;
+    taskSkills.forEach(ts => {
+        const tsClean = ts.toLowerCase();
+        if (volSkills.some(vs => vs.includes(tsClean) || tsClean.includes(vs))) {
+            skillMatches++;
+        }
+    });
+    
+    if (taskSkills.length > 0) {
+        score += Math.min(35, Math.round((skillMatches / taskSkills.length) * 35));
+    }
+    
+    // 2. Proximity location matching (max +15)
+    const taskLoc = (need.location || '').toLowerCase();
+    const volLoc = (volunteer.currentLocation || '').toLowerCase();
+    if (taskLoc && volLoc && (taskLoc.includes(volLoc) || volLoc.includes(taskLoc))) {
+        score += 15;
+    } else {
+        // partial match check
+        const volParts = volLoc.split(/[\s,]+/);
+        if (volParts.some(part => part.length > 3 && taskLoc.includes(part))) {
+            score += 8;
+        }
+    }
+    
+    // 3. Availability checking (max +10)
+    const taskDesc = (need.description || '').toLowerCase();
+    const volAvail = (volunteer.availability || '').toLowerCase();
+    
+    const timeKeywords = ['weekend', 'evening', 'morning', 'saturday', 'sunday', 'weekday', 'night'];
+    timeKeywords.forEach(kw => {
+        if (taskDesc.includes(kw) && volAvail.includes(kw)) {
+            score += 5;
+        }
+    });
+    
+    score = Math.min(99, Math.max(45, score));
+    return score;
 }
 
 function renderRoleBanner(needs) {
@@ -39,15 +148,13 @@ function renderRoleBanner(needs) {
         const adminData = globalAdmins.find(a => a.username === adminUser) || {};
         const rating = adminData.rating || 5.0;
         const completed = adminData.tasksCompleted || 0;
-        
-        // Count open tasks owned by this Admin
         const myTasksCount = needs.filter(n => n.createdBy === adminUser && n.status !== 'completed').length;
         
         banner.innerHTML = `
             <div class="card" style="margin-bottom: 2rem; padding: 1.5rem 2rem; flex-direction: row; align-items: center; justify-content: space-between; border-color: rgba(99, 102, 241, 0.2); flex-wrap: wrap; gap: 1rem;">
                 <div>
                     <h2 style="font-size: 1.5rem; color: var(--text-main); font-family: 'Outfit'; display: flex; align-items: center; gap: 8px;">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 4px rgba(99,102,241,0.5))"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 4px rgba(99,102,241,0.6))"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                         Admin Portal
                     </h2>
                     <p style="color: var(--text-light); font-size: 0.9rem;">Logged in as: <strong style="color: var(--text-main);">${adminUser}</strong></p>
@@ -71,10 +178,7 @@ function renderRoleBanner(needs) {
     } else if (Auth.isVolunteer()) {
         const volUser = Auth.getToken();
         const volData = globalVolunteers.find(v => v.username === volUser) || {};
-        
-        // Count tasks joined
         const joinedCount = needs.filter(n => n.assignedVolunteers.some(v => v.id === volData.id)).length;
-        // Count requests pending
         const pendingCount = needs.filter(n => n.requests.some(r => r.username === volUser && r.status === 'pending')).length;
 
         banner.innerHTML = `
@@ -163,11 +267,19 @@ function createNeedCard(need) {
                     need.requests.filter(r => r.status === 'pending').forEach(r => {
                         const vData = globalVolunteers.find(v => v.username === r.username);
                         if(vData) {
+                            const matchPercent = calculateCompatibilityScore(need, vData);
+                            let scoreColor = '#10b981'; // Green for high
+                            if (matchPercent < 75) scoreColor = '#f59e0b'; // Amber for medium
+                            if (matchPercent < 55) scoreColor = '#ef4444'; // Red for low
+
                             reqHtml += `
-                            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:0.5rem 0.75rem; border-radius:8px; margin-bottom:0.5rem;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:0.5rem 0.75rem; border-radius:8px; margin-bottom:0.5rem; flex-wrap:wrap; gap:0.5rem;">
                                 <div style="display:flex; align-items:center; gap:10px">
                                    <img src="${vData.profilePic}" style="width:28px; height:28px; border-radius:50%; object-fit:cover;">
-                                   <span style="font-size:0.9rem; font-weight:600; color:var(--text-main);">${vData.name}</span>
+                                   <div>
+                                       <span style="font-size:0.9rem; font-weight:600; color:var(--text-main);">${vData.name}</span>
+                                       <span style="display:block; font-size:0.75rem; font-weight:700; color:${scoreColor}">${matchPercent}% Match</span>
+                                   </div>
                                 </div>
                                 <button class="btn" style="padding:0.35rem 0.85rem; font-size:0.8rem; box-shadow:none;" onclick="approveJoin('${need.id}', '${vData.username}')">Approve</button>
                             </div>`;

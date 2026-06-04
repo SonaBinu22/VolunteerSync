@@ -28,19 +28,60 @@ const MIME_TYPES = {
     '.svg': 'image/svg+xml'
 };
 
+// Client connections for real-time SSE broadcasts
+const sseClients = new Set();
+
+function broadcastEvent(data) {
+    const message = `data: ${JSON.stringify(data)}\n\n`;
+    for (const client of sseClients) {
+        try {
+            client.write(message);
+        } catch (e) {
+            sseClients.delete(client);
+        }
+    }
+}
+
 const server = http.createServer(async (req, res) => {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, POST');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, POST, PUT, DELETE');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-auth-token, x-auth-role');
 
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
         return res.end();
     }
 
+    // SSE Event Stream Endpoint
+    if (req.url === '/api/events') {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*'
+        });
+        res.write('retry: 5000\n\n');
+        sseClients.add(res);
+
+        req.on('close', () => {
+            sseClients.delete(res);
+        });
+        return;
+    }
+
     if (req.url.startsWith('/api')) {
-        return apiHandler(req, res);
+        await apiHandler(req, res);
+        
+        // Auto-save database changes on completion
+        const { saveData } = require('./services/dataStore');
+        saveData();
+
+        // Broadcast a real-time update event to all active client tabs if database is mutated
+        if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
+            broadcastEvent({ type: 'update', method: req.method, url: req.url });
+        }
+        return;
     }
 
     // Serve static files

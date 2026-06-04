@@ -36,8 +36,28 @@ Return response in pure JSON format with NO markdown wrapping, using exactly thi
         let textResult = data.candidates[0].content.parts[0].text;
         return JSON.parse(textResult);
     } catch (error) {
-        console.error("Error analyzing need with Gemini:", error);
-        throw error;
+        console.error("Error analyzing need with Gemini, falling back to local heuristics:", error);
+        
+        const descLower = description.toLowerCase();
+        let urgency = "Medium";
+        if (descLower.includes("urgent") || descLower.includes("emergency") || descLower.includes("critical") || descLower.includes("asap") || descLower.includes("immediately")) {
+            urgency = "High";
+        } else if (descLower.includes("whenever") || descLower.includes("low priority") || descLower.includes("flexible")) {
+            urgency = "Low";
+        }
+        
+        const possibleSkills = ["Physical Stamina", "Driving", "Communication", "Organization", "Teaching", "Gardening", "Cooking", "First Aid"];
+        const extractedSkills = possibleSkills.filter(skill => descLower.includes(skill.toLowerCase()));
+        
+        if (extractedSkills.length === 0) {
+            extractedSkills.push("General Volunteer");
+        }
+        
+        return {
+            urgency,
+            skills: extractedSkills,
+            reason: "AI matching offline. Local rule-based analyzer detected key urgency signals and skills."
+        };
     }
 };
 
@@ -91,13 +111,53 @@ Return MUST BE purely in JSON format WITHOUT markdown wrapping, exactly this str
         
         let textResult = data.candidates[0].content.parts[0].text;
         
-        // Sometimes LLM returns markdown format even when instructed not to, doing a tiny safety replace:
         textResult = textResult.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
         return JSON.parse(textResult);
 
     } catch (error) {
-        console.error("Error matching volunteers with Gemini:", error);
-        throw error;
+        console.error("Error matching volunteers with Gemini, falling back to local matching heuristics:", error);
+        
+        const reqCount = need.requiredVolunteerCount || 1;
+        const scoredVolunteers = volunteers.map(v => {
+            let score = 40; // baseline
+            
+            const taskSkills = (need.aiAnalysis && need.aiAnalysis.skills) || [];
+            const volSkills = v.skills ? v.skills.split(',').map(s => s.trim().toLowerCase()) : [];
+            
+            let skillMatches = 0;
+            taskSkills.forEach(ts => {
+                const tsClean = ts.toLowerCase();
+                if (volSkills.some(vs => vs.includes(tsClean) || tsClean.includes(vs))) {
+                    skillMatches++;
+                }
+            });
+            
+            if (taskSkills.length > 0) {
+                score += Math.min(35, Math.round((skillMatches / taskSkills.length) * 35));
+            }
+            
+            const taskLoc = (need.location || '').toLowerCase();
+            const volLoc = (v.currentLocation || '').toLowerCase();
+            if (taskLoc && volLoc && (taskLoc.includes(volLoc) || volLoc.includes(taskLoc))) {
+                score += 15;
+            }
+            
+            return { volunteer: v, score };
+        });
+        
+        scoredVolunteers.sort((a, b) => b.score - a.score);
+        const topMatches = scoredVolunteers.slice(0, reqCount);
+        
+        return {
+            selectedVolunteerIds: topMatches.map(m => m.volunteer.id),
+            selectedVolunteerNames: topMatches.map(m => m.volunteer.name),
+            selectedVolunteerDetails: topMatches.map(m => ({
+                name: m.volunteer.name,
+                id: m.volunteer.id,
+                pic: m.volunteer.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.volunteer.name)}&background=random`
+            })),
+            reason: `AI matching offline. Local matching engine selected top candidates based on skill match and location proximity.`
+        };
     }
 };
 
