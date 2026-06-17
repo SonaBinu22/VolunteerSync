@@ -1,3 +1,9 @@
+// Immediately apply saved theme preference to minimize flash
+(function() {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+})();
+
 const Auth = {
     setAuth(username, role) {
         localStorage.setItem('authToken', username);
@@ -44,6 +50,31 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
         navLinks.innerHTML = linksHtml;
+
+        // Append theme toggle link
+        const currentTheme = localStorage.getItem('theme') || 'dark';
+        const toggleIcon = currentTheme === 'light' ? '🌙' : '☀️';
+        const themeBtn = document.createElement('a');
+        themeBtn.href = '#';
+        themeBtn.id = 'nav-theme-toggle';
+        themeBtn.style.marginLeft = '1rem';
+        themeBtn.style.cursor = 'pointer';
+        themeBtn.innerText = toggleIcon;
+        themeBtn.title = `Switch to ${currentTheme === 'light' ? 'Dark' : 'Light'} Mode`;
+        navLinks.appendChild(themeBtn);
+
+        themeBtn.onclick = (e) => {
+            e.preventDefault();
+            const activeTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const newTheme = activeTheme === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            themeBtn.innerText = newTheme === 'light' ? '🌙' : '☀️';
+            themeBtn.title = `Switch to ${newTheme === 'light' ? 'Dark' : 'Light'} Mode`;
+            if (typeof renderCalendar === 'function' && typeof currentView !== 'undefined' && currentView === 'calendar') {
+                renderCalendar();
+            }
+        };
 
         // Set active class dynamically matching window location path
         const currentPath = window.location.pathname.split('/').pop() || 'index.html';

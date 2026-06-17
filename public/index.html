@@ -27,7 +27,10 @@
                     <input type="text" id="username" class="form-control" required placeholder="Enter username">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Password</label>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <label class="form-label" style="margin-bottom:0;">Password</label>
+                        <a href="#" id="linkForgotPassword" style="color:var(--text-light); font-size:0.85rem; text-decoration:none; font-weight:500;">Forgot Password?</a>
+                    </div>
                     <input type="password" id="password" class="form-control" required placeholder="Enter password">
                 </div>
                 <button type="submit" class="btn btn-full">Sign In</button>
@@ -98,6 +101,120 @@
                 alert("Registered Admin Successfully! Click 'Sign In' to proceed.");
             } catch(e) { alert(e.message); }
         };
+
+        // --- PASSWORD RECOVERY FLOW ---
+        const recoverModal = document.getElementById('recoveryModalOverlay');
+        const linkForgot = document.getElementById('linkForgotPassword');
+        const btnCheckUser = document.getElementById('btnCheckUser');
+        const btnResetPassword = document.getElementById('btnResetPassword');
+        const btnCancelRecovery = document.getElementById('btnCancelRecovery');
+        
+        const step1 = document.getElementById('recoverStep1');
+        const step2 = document.getElementById('recoverStep2');
+        const recUsername = document.getElementById('recoverUsername');
+        const recRole = document.getElementById('recoverRole');
+        const recAnswer = document.getElementById('recoverAnswer');
+        const recNewPassword = document.getElementById('recoverNewPassword');
+        const recChallengeLabel = document.getElementById('recoverChallengeLabel');
+
+        linkForgot.onclick = (e) => {
+            e.preventDefault();
+            recUsername.value = '';
+            recAnswer.value = '';
+            recNewPassword.value = '';
+            step1.style.display = 'block';
+            step2.style.display = 'none';
+            recoverModal.classList.add('open');
+        };
+
+        btnCancelRecovery.onclick = () => {
+            recoverModal.classList.remove('open');
+        };
+
+        btnCheckUser.onclick = async () => {
+            const username = recUsername.value.trim();
+            const role = recRole.value;
+            if (!username) return alert("Please enter a username.");
+            
+            try {
+                const res = await API.recoverInit(username, role);
+                recChallengeLabel.innerText = res.prompt;
+                recAnswer.placeholder = role === 'admin' ? 'e.g. admin@volunteersync.local' : 'e.g. 555-0101';
+                step1.style.display = 'none';
+                step2.style.display = 'block';
+            } catch (err) {
+                alert(err.message);
+            }
+        };
+
+        btnResetPassword.onclick = async () => {
+            const username = recUsername.value.trim();
+            const role = recRole.value;
+            const answer = recAnswer.value.trim();
+            const newPassword = recNewPassword.value.trim();
+            if (!answer || !newPassword) return alert("Please fill in both the verification answer and your new password.");
+
+            try {
+                await API.recoverReset(username, role, answer, newPassword);
+                alert("Password reset successful! You can now sign in with your new password.");
+                recoverModal.classList.remove('open');
+                
+                // Pre-fill main form
+                document.getElementById('username').value = username;
+                document.getElementById('password').value = newPassword;
+                // Switch login role tabs if needed
+                if (role === 'admin') {
+                    document.getElementById('tabAdmin').click();
+                } else {
+                    document.getElementById('tabVol').click();
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        };
     </script>
+
+    <!-- Password Recovery Modal Overlay -->
+    <div id="recoveryModalOverlay" class="modal-overlay">
+        <div class="review-modal-content" style="width: 450px;">
+            <h2 style="font-family:'Outfit'; margin-bottom: 0.5rem; text-align: center;">Reset Account Password</h2>
+            <p style="color:var(--text-light); text-align:center; font-size:0.9rem; margin-bottom: 1.5rem;">Verify registered contact information to recovery your profile.</p>
+            
+            <form id="recoveryForm" onsubmit="event.preventDefault();">
+                <!-- Step 1: Username & Role -->
+                <div id="recoverStep1">
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" id="recoverUsername" class="form-control" required placeholder="Enter your username">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Account Type / Role</label>
+                        <select id="recoverRole" class="form-control" style="margin-bottom: 1.5rem;">
+                            <option value="volunteer">Volunteer</option>
+                            <option value="admin">Administrator</option>
+                        </select>
+                    </div>
+                    <button type="button" id="btnCheckUser" class="btn btn-full">Verify Username</button>
+                </div>
+
+                <!-- Step 2: Verification Challenge & Password -->
+                <div id="recoverStep2" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label" id="recoverChallengeLabel">Verification Challenge</label>
+                        <input type="text" id="recoverAnswer" class="form-control" placeholder="Enter answer">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">New Password</label>
+                        <input type="password" id="recoverNewPassword" class="form-control" placeholder="Enter new password">
+                    </div>
+                    <button type="button" id="btnResetPassword" class="btn btn-full">Reset Password</button>
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                    <button type="button" id="btnCancelRecovery" class="btn btn-full" style="margin-top:0; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:var(--text-main); box-shadow:none;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </body>
 </html>

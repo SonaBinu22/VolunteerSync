@@ -207,6 +207,7 @@ window.toggleNotificationDrawer = (show) => {
 
 document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('needsGrid')) {
+        initCalendarToggle();
         loadNeeds();
         
         const searchInput = document.getElementById('searchNeeds');
@@ -471,6 +472,60 @@ function createNeedCard(need) {
         `;
     }
 
+    // Render Milestone Checklist
+    let checklistSection = '';
+    const checklist = need.checklist || [];
+    if (checklist.length > 0) {
+        const completedCount = checklist.filter(item => item.completed).length;
+        const totalCount = checklist.length;
+        const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+        
+        const isOwner = need.createdBy === Auth.getToken();
+        const isAssigned = need.assignedVolunteers.some(v => v.id === globalVolunteers.find(gv => gv.username === Auth.getToken())?.id);
+        const canEdit = isOwner || isAssigned;
+
+        const checklistItems = checklist.map(item => {
+            const completedByText = item.completed && item.completedBy ? ` (by ${item.completedBy})` : '';
+            return `
+                <li style="display:flex; align-items:center; gap:8px; margin-bottom:0.3rem; font-size:0.85rem;">
+                    <input type="checkbox" 
+                           ${item.completed ? 'checked' : ''} 
+                           ${canEdit ? '' : 'disabled'} 
+                           onclick="toggleSubtask('${need.id}', '${item.id}')"
+                           style="width: 14px; height: 14px; cursor: ${canEdit ? 'pointer' : 'default'}; margin-bottom: 0;">
+                    <span style="text-decoration: ${item.completed ? 'line-through' : 'none'}; color: ${item.completed ? 'var(--text-light)' : 'var(--text-main)'};">
+                        ${item.text}${completedByText}
+                    </span>
+                </li>
+            `;
+        }).join('');
+
+        const addMilestoneInput = canEdit ? `
+            <div style="display:flex; gap:0.5rem; margin-top:0.75rem;">
+                <input type="text" id="addChecklistInput-${need.id}" class="form-control" placeholder="Add custom subtask..." style="padding:0.4rem 0.8rem; font-size:0.8rem; margin-bottom:0; flex-grow:1;">
+                <button onclick="addCustomSubtask('${need.id}')" class="btn" style="padding:0.4rem 0.8rem; font-size:0.8rem; margin:0; box-shadow:none;">Add</button>
+            </div>
+        ` : '';
+
+        checklistSection = `
+            <div class="checklist-section" style="margin-top:1.25rem; border-top:1px solid rgba(255,255,255,0.08); padding-top:1rem;">
+                <div class="checklist-progress-container" style="margin-bottom: 0.75rem;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-light); margin-bottom:4px; font-weight:600;">
+                        <span>📋 Milestone Checklist</span>
+                        <span>${completedCount} of ${totalCount} completed</span>
+                    </div>
+                    <div class="progress-bar-bg" style="background: rgba(255,255,255,0.08); height: 6px; border-radius: 3px; overflow: hidden;">
+                        <div class="progress-bar-fill" style="background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%); height: 100%; width: ${progressPercent}%; transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
+                <ul style="list-style: none; padding: 0; margin: 0; display:flex; flex-direction:column; gap:0.4rem;">
+                    ${checklistItems}
+                </ul>
+                ${addMilestoneInput}
+            </div>
+        `;
+    }
+
     const unassignedCount = (need.requiredVolunteerCount || 1) - assignedVolunteers.length;
     let actionArea = '';
 
@@ -570,6 +625,7 @@ function createNeedCard(need) {
                 </div>
 
                 ${assignedSection}
+                ${checklistSection}
             </div>
             
             ${chatButton}
@@ -768,3 +824,255 @@ window.exportReportCSV = () => {
     link.click();
     document.body.removeChild(link);
 };
+
+// --- INTERACTIVE CALENDAR & CHECKLIST HELPERS ---
+let currentView = 'grid'; // 'grid' or 'calendar'
+let calendarDate = new Date();
+
+window.initCalendarToggle = () => {
+    const btnGrid = document.getElementById('btnGridView');
+    const btnCal = document.getElementById('btnCalendarView');
+    const gridDiv = document.getElementById('needsGrid');
+    const calDiv = document.getElementById('needsCalendar');
+
+    if (!btnGrid || !btnCal) return;
+
+    btnGrid.onclick = () => {
+        currentView = 'grid';
+        gridDiv.style.display = 'grid';
+        calDiv.style.display = 'none';
+
+        btnGrid.style.background = 'var(--primary)';
+        btnGrid.style.color = 'white';
+        btnGrid.style.boxShadow = '0 4px 10px rgba(99, 102, 241, 0.25)';
+        btnGrid.style.fontWeight = '600';
+
+        btnCal.style.background = 'transparent';
+        btnCal.style.color = 'var(--text-light)';
+        btnCal.style.boxShadow = 'none';
+        btnCal.style.fontWeight = '500';
+        
+        filterAndRenderNeeds();
+    };
+
+    btnCal.onclick = () => {
+        currentView = 'calendar';
+        gridDiv.style.display = 'none';
+        calDiv.style.display = 'block';
+
+        btnCal.style.background = 'var(--primary)';
+        btnCal.style.color = 'white';
+        btnCal.style.boxShadow = '0 4px 10px rgba(99, 102, 241, 0.25)';
+        btnCal.style.fontWeight = '600';
+
+        btnGrid.style.background = 'transparent';
+        btnGrid.style.color = 'var(--text-light)';
+        btnGrid.style.boxShadow = 'none';
+        btnGrid.style.fontWeight = '500';
+
+        renderCalendar();
+    };
+};
+
+window.renderCalendar = () => {
+    const container = document.getElementById('needsCalendar');
+    if (!container) return;
+
+    const searchVal = document.getElementById('searchNeeds')?.value.toLowerCase() || '';
+    const urgencyVal = document.getElementById('filterUrgency')?.value || '';
+    const statusVal = document.getElementById('filterStatus')?.value || '';
+
+    const filtered = cachedNeeds.filter(need => {
+        const titleMatch = need.title.toLowerCase().includes(searchVal);
+        const descMatch = need.description.toLowerCase().includes(searchVal);
+        const locMatch = need.location.toLowerCase().includes(searchVal);
+        const textMatch = titleMatch || descMatch || locMatch;
+        const urgencyMatch = !urgencyVal || (need.aiAnalysis && need.aiAnalysis.urgency && need.aiAnalysis.urgency.toLowerCase() === urgencyVal.toLowerCase());
+        const statusMatch = !statusVal || (need.status === statusVal);
+        return textMatch && urgencyMatch && statusMatch;
+    });
+
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+
+    const monthNames = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const prevTotalDays = new Date(year, month, 0).getDate();
+
+    let calendarHtml = `
+        <div class="calendar-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+            <h2 style="font-family:'Outfit'; font-size:1.5rem; color:var(--text-main); margin:0;">${monthNames[month]} ${year}</h2>
+            <div style="display:flex; gap:0.5rem;">
+                <button class="btn" onclick="prevMonth()" style="padding:0.4rem 0.8rem; font-size:0.9rem; box-shadow:none;"><</button>
+                <button class="btn" onclick="nextMonth()" style="padding:0.4rem 0.8rem; font-size:0.9rem; box-shadow:none;">></button>
+            </div>
+        </div>
+        <div class="calendar-grid">
+            <div class="calendar-day-header">Sun</div>
+            <div class="calendar-day-header">Mon</div>
+            <div class="calendar-day-header">Tue</div>
+            <div class="calendar-day-header">Wed</div>
+            <div class="calendar-day-header">Thu</div>
+            <div class="calendar-day-header">Fri</div>
+            <div class="calendar-day-header">Sat</div>
+    `;
+
+    // Fill preceding empty boxes
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+        const d = prevTotalDays - i;
+        calendarHtml += `<div class="calendar-day-cell prev-month-day"><span class="day-number">${d}</span></div>`;
+    }
+
+    // Fill current month days
+    for (let day = 1; day <= totalDays; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        const dayNeeds = filtered.filter(n => {
+            const cDate = new Date(n.createdAt);
+            const cDateStr = `${cDate.getFullYear()}-${String(cDate.getMonth() + 1).padStart(2, '0')}-${String(cDate.getDate()).padStart(2, '0')}`;
+            return cDateStr === dateStr;
+        });
+
+        let needsHtml = '';
+        dayNeeds.forEach(need => {
+            const urgency = (need.aiAnalysis?.urgency || 'Low').toLowerCase();
+            let urgencyClass = 'urgency-low-label';
+            if (urgency === 'high') urgencyClass = 'urgency-high-label';
+            if (urgency === 'medium') urgencyClass = 'urgency-medium-label';
+            
+            needsHtml += `
+                <div class="calendar-task-tag ${urgencyClass}" onclick="openCalendarTaskModal('${need.id}', event)">
+                    ${need.title}
+                </div>
+            `;
+        });
+
+        const today = new Date();
+        const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+        const cellClass = isToday ? 'calendar-day-cell today' : 'calendar-day-cell';
+
+        calendarHtml += `
+            <div class="${cellClass}">
+                <span class="day-number">${day}</span>
+                <div class="calendar-tasks-container">${needsHtml}</div>
+            </div>
+        `;
+    }
+
+    // Fill trailing empty boxes
+    const totalCells = firstDayIndex + totalDays;
+    const remainingCells = (7 - (totalCells % 7)) % 7;
+    for (let day = 1; day <= remainingCells; day++) {
+        calendarHtml += `<div class="calendar-day-cell next-month-day"><span class="day-number">${day}</span></div>`;
+    }
+
+    calendarHtml += `</div>`;
+    container.innerHTML = calendarHtml;
+};
+
+window.prevMonth = () => {
+    calendarDate.setMonth(calendarDate.getMonth() - 1);
+    renderCalendar();
+};
+
+window.nextMonth = () => {
+    calendarDate.setMonth(calendarDate.getMonth() + 1);
+    renderCalendar();
+};
+
+window.openCalendarTaskModal = (needId, event) => {
+    if (event) event.stopPropagation();
+    const need = cachedNeeds.find(n => n.id === needId);
+    if (!need) return;
+
+    document.getElementById('calModalTitle').innerText = need.title;
+    
+    const ai = need.aiAnalysis || {};
+    const urgency = (ai.urgency || 'Low').toLowerCase();
+    const skills = ai.skills || [];
+    
+    const assignedVolunteers = need.assignedVolunteers || [];
+    let assignedNames = assignedVolunteers.length > 0 ? 
+        assignedVolunteers.map(v => v.name).join(', ') : 'None yet';
+
+    let checklistHtml = '';
+    const checklist = need.checklist || [];
+    if (checklist.length > 0) {
+        checklistHtml = `
+            <div style="margin-top:1.5rem; border-top:1px solid rgba(255,255,255,0.08); padding-top:1rem;">
+                <strong style="color:var(--text-main); display:block; margin-bottom:0.5rem;">Milestone Checklist:</strong>
+                <ul style="list-style:none; padding:0; margin:0;">
+                    ${checklist.map(item => `
+                        <li style="display:flex; align-items:center; gap:8px; margin-bottom:0.4rem; font-size:0.9rem;">
+                            <span style="color:${item.completed ? '#10b981' : 'var(--text-light)'}">
+                                ${item.completed ? '✓' : '○'}
+                            </span>
+                            <span style="text-decoration:${item.completed ? 'line-through' : 'none'}; color:${item.completed ? 'var(--text-light)' : 'var(--text-main)'}">
+                                ${item.text}
+                            </span>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    const html = `
+        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+            <div><strong style="color:var(--text-main)">Location:</strong> ${need.location}</div>
+            ${need.taskLocationDetails ? `<div><strong style="color:var(--text-main)">Details:</strong> <em>${need.taskLocationDetails}</em></div>` : ''}
+            <div><strong style="color:var(--text-main)">Urgency:</strong> <span class="badge ${urgency}" style="font-size:0.75rem;">${urgency.toUpperCase()}</span></div>
+            <div><strong style="color:var(--text-main)">Status:</strong> <span style="text-transform:capitalize; font-weight:600; color:var(--primary);">${need.status}</span></div>
+            <div><strong style="color:var(--text-main)">Required Volunteers:</strong> ${need.requiredVolunteerCount || 1}</div>
+            <div><strong style="color:var(--text-main)">Assigned Helpers:</strong> ${assignedNames}</div>
+            <div style="margin-top:0.5rem; line-height:1.5;"><strong style="color:var(--text-main)">Description:</strong><br/>${need.description}</div>
+            <div style="margin-top:0.5rem;">
+                <strong style="color:var(--text-main)">Skills Required:</strong><br/>
+                <div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.25rem;">
+                    ${skills.map(skill => `<span class="skill-tag" style="margin:0">${skill}</span>`).join('')}
+                </div>
+            </div>
+            ${checklistHtml}
+            <div style="margin-top:1.5rem;">
+                <button class="btn btn-full" onclick="closeCalendarTaskModal(); scrollToCard('${need.id}')" style="margin-top:0;">Navigate to Task Card</button>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('calModalBody').innerHTML = html;
+    document.getElementById('calendarTaskModalOverlay').classList.add('open');
+};
+
+window.closeCalendarTaskModal = () => {
+    document.getElementById('calendarTaskModalOverlay').classList.remove('open');
+};
+
+window.toggleSubtask = async (needId, itemId) => {
+    try {
+        await API.toggleChecklistItem(needId, itemId);
+        await loadNeeds();
+    } catch (err) {
+        alert("Action failed: " + err.message);
+    }
+};
+
+window.addCustomSubtask = async (needId) => {
+    const input = document.getElementById(`addChecklistInput-${needId}`);
+    if (!input || !input.value.trim()) return;
+    
+    const text = input.value.trim();
+    input.value = '';
+    
+    try {
+        await API.addChecklistItem(needId, text);
+        await loadNeeds();
+    } catch (err) {
+        alert("Action failed: " + err.message);
+    }
+};
+

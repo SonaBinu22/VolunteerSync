@@ -30,6 +30,12 @@ const API = {
     universalLogin(username, password, loginRole) { 
         return this.fetchWrap('/auth/login', { method: 'POST', body: JSON.stringify({username, password, loginRole}) }); 
     },
+    recoverInit(username, role) {
+        return this.fetchWrap('/auth/recover-init', { method: 'POST', body: JSON.stringify({ username, role }) });
+    },
+    recoverReset(username, role, answer, newPassword) {
+        return this.fetchWrap('/auth/recover-reset', { method: 'POST', body: JSON.stringify({ username, role, answer, newPassword }) });
+    },
     
     requestToJoinTask(needId) { return this.fetchWrap(`/needs/request/${needId}`, { method: 'POST' }); },
     approveRequest(needId, volunteerUsername) { return this.fetchWrap(`/needs/approve/${needId}`, { method: 'POST', body: JSON.stringify({volunteerUsername}) }); },
@@ -46,6 +52,12 @@ const API = {
     sendChatMessage(needId, text) { return this.fetchWrap('/chat/send', { method: 'POST', body: JSON.stringify({ needId, text }) }); },
     submitReview(volunteerUsername, rating, comment, needId) { 
         return this.fetchWrap('/volunteers/review', { method: 'POST', body: JSON.stringify({ volunteerUsername, rating, comment, needId }) }); 
+    },
+    toggleChecklistItem(needId, itemId) {
+        return this.fetchWrap('/needs/checklist/toggle', { method: 'POST', body: JSON.stringify({ needId, itemId }) });
+    },
+    addChecklistItem(needId, text) {
+        return this.fetchWrap('/needs/checklist/add', { method: 'POST', body: JSON.stringify({ needId, text }) });
     }
 };
 

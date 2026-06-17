@@ -24,6 +24,88 @@ module.exports = async function apiHandler(req, res) {
     const token = req.headers['x-auth-token'];
     const role = req.headers['x-auth-role'];
 
+    // --- PASSWORD RECOVERY API ---
+    if (method === 'POST' && url === '/api/auth/recover-init') {
+        try {
+            const { username, role: loginRole } = await parseBody(req);
+            if (!username || !loginRole) {
+                return sendJson(res, 400, { error: 'Username and role are required' });
+            }
+            let user;
+            if (loginRole === 'admin') {
+                user = admins.find(a => a.username === username);
+            } else if (loginRole === 'volunteer') {
+                user = volunteers.find(v => v.username === username);
+            } else {
+                return sendJson(res, 400, { error: 'Invalid role' });
+            }
+
+            if (!user) {
+                return sendJson(res, 404, { error: 'User not found' });
+            }
+
+            if (loginRole === 'admin') {
+                return sendJson(res, 200, { 
+                    challenge: 'email', 
+                    prompt: 'Please enter your registered email address to verify identity.' 
+                });
+            } else {
+                return sendJson(res, 200, { 
+                    challenge: 'phone', 
+                    prompt: 'Please enter your registered phone number to verify identity.' 
+                });
+            }
+        } catch (err) {
+            return sendJson(res, 500, { error: 'Internal server error' });
+        }
+    }
+
+    if (method === 'POST' && url === '/api/auth/recover-reset') {
+        try {
+            const { username, role: loginRole, answer, newPassword } = await parseBody(req);
+            if (!username || !loginRole || !answer || !newPassword) {
+                return sendJson(res, 400, { error: 'Missing required fields' });
+            }
+
+            let user;
+            if (loginRole === 'admin') {
+                user = admins.find(a => a.username === username);
+            } else if (loginRole === 'volunteer') {
+                user = volunteers.find(v => v.username === username);
+            } else {
+                return sendJson(res, 400, { error: 'Invalid role' });
+            }
+
+            if (!user) {
+                return sendJson(res, 404, { error: 'User not found' });
+            }
+
+            let isCorrect = false;
+            if (loginRole === 'admin') {
+                const registeredEmail = (user.email || '').trim().toLowerCase();
+                const providedAnswer = answer.trim().toLowerCase();
+                isCorrect = registeredEmail && registeredEmail === providedAnswer;
+            } else {
+                const registeredPhone = (user.phone || '').replace(/\D/g, '');
+                const providedPhone = answer.replace(/\D/g, '');
+                isCorrect = registeredPhone && registeredPhone === providedPhone;
+                if (!isCorrect) {
+                    isCorrect = (user.phone || '').trim() === answer.trim();
+                }
+            }
+
+            if (!isCorrect) {
+                return sendJson(res, 400, { error: 'Incorrect recovery information. Verification failed.' });
+            }
+
+            user.password = newPassword;
+            saveData();
+            return sendJson(res, 200, { message: 'Password reset successful.' });
+        } catch (err) {
+            return sendJson(res, 500, { error: 'Internal server error' });
+        }
+    }
+
     // --- UNIFIED AUTH API ---
     if (method === 'POST' && url === '/api/auth/login') {
         try {
@@ -147,7 +229,12 @@ module.exports = async function apiHandler(req, res) {
                 taskLocationDetails: taskLocationDetails || '',
                 requiredVolunteerCount: parseInt(requiredVolunteerCount) || 1,
                 status: "open", createdAt: new Date().toISOString(), createdBy: token,
-                requests: [], aiAnalysis, assignedVolunteers: []
+                requests: [], aiAnalysis, assignedVolunteers: [],
+                checklist: [
+                    { id: 'c_prep_' + Date.now(), text: 'Preparation & site check-in', completed: false, completedBy: null },
+                    { id: 'c_exec_' + Date.now(), text: 'Execute primary task operations', completed: false, completedBy: null },
+                    { id: 'c_cleanup_' + Date.now(), text: 'Clean up & final reporting', completed: false, completedBy: null }
+                ]
             };
             needs.unshift(newNeed);
             return sendJson(res, 201, newNeed);
@@ -204,6 +291,69 @@ module.exports = async function apiHandler(req, res) {
         adminObj.rating = Math.min(5.0, adminObj.rating + 0.05).toFixed(1);
         
         return sendJson(res, 200, { message: 'Task Marked Complete' });
+    }
+
+    // --- CHECKLIST MILESTONES API ---
+    if (method === 'POST' && url === '/api/needs/checklist/add') {
+        try {
+            const { needId, text } = await parseBody(req);
+            if (!needId || !text) return sendJson(res, 400, { error: 'needId and text are required' });
+            
+            const need = needs.find(n => n.id === needId);
+            if (!need) return sendJson(res, 404, { error: 'Need not found' });
+            
+            const isOwner = need.createdBy === token;
+            const isAssigned = need.assignedVolunteers.some(v => v.id === volunteers.find(gv => gv.username === token)?.id);
+            if (!isOwner && !isAssigned) {
+                return sendJson(res, 403, { error: 'Unauthorized: Only task owner or assigned volunteer can edit checklist' });
+            }
+
+            if (!need.checklist) need.checklist = [];
+            const newItem = {
+                id: 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                text,
+                completed: false,
+                completedBy: null
+            };
+            need.checklist.push(newItem);
+            
+            if (global.broadcastEvent) {
+                global.broadcastEvent({ type: 'update', method, url });
+            }
+            return sendJson(res, 201, newItem);
+        } catch (err) {
+            return sendJson(res, 500, { error: 'Failed to add checklist item' });
+        }
+    }
+
+    if (method === 'POST' && url === '/api/needs/checklist/toggle') {
+        try {
+            const { needId, itemId } = await parseBody(req);
+            if (!needId || !itemId) return sendJson(res, 400, { error: 'needId and itemId are required' });
+            
+            const need = needs.find(n => n.id === needId);
+            if (!need) return sendJson(res, 404, { error: 'Need not found' });
+            
+            const isOwner = need.createdBy === token;
+            const isAssigned = need.assignedVolunteers.some(v => v.id === volunteers.find(gv => gv.username === token)?.id);
+            if (!isOwner && !isAssigned) {
+                return sendJson(res, 403, { error: 'Unauthorized: Only task owner or assigned volunteer can toggle milestones' });
+            }
+
+            if (!need.checklist) need.checklist = [];
+            const item = need.checklist.find(i => i.id === itemId);
+            if (!item) return sendJson(res, 404, { error: 'Checklist item not found' });
+            
+            item.completed = !item.completed;
+            item.completedBy = item.completed ? token : null;
+            
+            if (global.broadcastEvent) {
+                global.broadcastEvent({ type: 'update', method, url });
+            }
+            return sendJson(res, 200, item);
+        } catch (err) {
+            return sendJson(res, 500, { error: 'Failed to toggle checklist item' });
+        }
     }
 
     if (method === 'GET' && url.startsWith('/api/match/')) { // legacy Gemini fallback

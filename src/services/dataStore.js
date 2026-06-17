@@ -24,7 +24,13 @@ const needs = [
             skills: ["Physical Stamina", "Organization", "Communication"],
             reason: "Food distribution is time-sensitive and critical for families in need."
         },
-        assignedVolunteers: []
+        assignedVolunteers: [],
+        checklist: [
+            { id: "c1", text: "Sort non-perishables", completed: false, completedBy: null },
+            { id: "c2", text: "Pack family boxes", completed: false, completedBy: null },
+            { id: "c3", text: "Load delivery vehicles", completed: false, completedBy: null },
+            { id: "c4", text: "Distribute at community center", completed: false, completedBy: null }
+        ]
     }
 ];
 
@@ -74,7 +80,18 @@ if (fs.existsSync(DB_PATH)) {
     try {
         const fileData = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
         if (fileData.admins) admins.splice(0, admins.length, ...fileData.admins);
-        if (fileData.needs) needs.splice(0, needs.length, ...fileData.needs);
+        if (fileData.needs) {
+            needs.splice(0, needs.length, ...fileData.needs.map(n => {
+                if (!n.checklist) {
+                    n.checklist = [
+                        { id: 'c_prep_' + n.id, text: 'Preparation & site check-in', completed: n.status === 'completed', completedBy: null },
+                        { id: 'c_exec_' + n.id, text: 'Execute primary task operations', completed: n.status === 'completed', completedBy: null },
+                        { id: 'c_cleanup_' + n.id, text: 'Clean up & final reporting', completed: n.status === 'completed', completedBy: null }
+                    ];
+                }
+                return n;
+            }));
+        }
         if (fileData.volunteers) volunteers.splice(0, volunteers.length, ...fileData.volunteers);
         if (fileData.messages) messages.splice(0, messages.length, ...fileData.messages);
     } catch (e) {
