@@ -44,6 +44,49 @@
         </div>
     </div>
     
+    <!-- Password Recovery Modal Overlay -->
+    <div id="recoveryModalOverlay" class="modal-overlay">
+        <div class="review-modal-content" style="width: 450px;">
+            <h2 style="font-family:'Outfit'; margin-bottom: 0.5rem; text-align: center;">Reset Account Password</h2>
+            <p style="color:var(--text-light); text-align:center; font-size:0.9rem; margin-bottom: 1.5rem;">Verify registered contact information to recovery your profile.</p>
+            
+            <form id="recoveryForm" onsubmit="event.preventDefault();">
+                <!-- Step 1: Username & Role -->
+                <div id="recoverStep1">
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" id="recoverUsername" class="form-control" required placeholder="Enter your username">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Account Type / Role</label>
+                        <select id="recoverRole" class="form-control" style="margin-bottom: 1.5rem;">
+                            <option value="volunteer">Volunteer</option>
+                            <option value="admin">Administrator</option>
+                        </select>
+                    </div>
+                    <button type="button" id="btnCheckUser" class="btn btn-full">Verify Username</button>
+                </div>
+
+                <!-- Step 2: Verification Challenge & Password -->
+                <div id="recoverStep2" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label" id="recoverChallengeLabel">Verification Challenge</label>
+                        <input type="text" id="recoverAnswer" class="form-control" placeholder="Enter answer">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">New Password</label>
+                        <input type="password" id="recoverNewPassword" class="form-control" placeholder="Enter new password">
+                    </div>
+                    <button type="button" id="btnResetPassword" class="btn btn-full">Reset Password</button>
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                    <button type="button" id="btnCancelRecovery" class="btn btn-full" style="margin-top:0; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:var(--text-main); box-shadow:none;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="js/auth.js"></script>
     <script src="js/api.js"></script>
     <script>
@@ -173,48 +216,5 @@
             }
         };
     </script>
-
-    <!-- Password Recovery Modal Overlay -->
-    <div id="recoveryModalOverlay" class="modal-overlay">
-        <div class="review-modal-content" style="width: 450px;">
-            <h2 style="font-family:'Outfit'; margin-bottom: 0.5rem; text-align: center;">Reset Account Password</h2>
-            <p style="color:var(--text-light); text-align:center; font-size:0.9rem; margin-bottom: 1.5rem;">Verify registered contact information to recovery your profile.</p>
-            
-            <form id="recoveryForm" onsubmit="event.preventDefault();">
-                <!-- Step 1: Username & Role -->
-                <div id="recoverStep1">
-                    <div class="form-group">
-                        <label class="form-label">Username</label>
-                        <input type="text" id="recoverUsername" class="form-control" required placeholder="Enter your username">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Account Type / Role</label>
-                        <select id="recoverRole" class="form-control" style="margin-bottom: 1.5rem;">
-                            <option value="volunteer">Volunteer</option>
-                            <option value="admin">Administrator</option>
-                        </select>
-                    </div>
-                    <button type="button" id="btnCheckUser" class="btn btn-full">Verify Username</button>
-                </div>
-
-                <!-- Step 2: Verification Challenge & Password -->
-                <div id="recoverStep2" style="display: none;">
-                    <div class="form-group">
-                        <label class="form-label" id="recoverChallengeLabel">Verification Challenge</label>
-                        <input type="text" id="recoverAnswer" class="form-control" placeholder="Enter answer">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">New Password</label>
-                        <input type="password" id="recoverNewPassword" class="form-control" placeholder="Enter new password">
-                    </div>
-                    <button type="button" id="btnResetPassword" class="btn btn-full">Reset Password</button>
-                </div>
-
-                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-                    <button type="button" id="btnCancelRecovery" class="btn btn-full" style="margin-top:0; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:var(--text-main); box-shadow:none;">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
 </body>
 </html>

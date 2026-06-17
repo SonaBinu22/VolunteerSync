@@ -21,6 +21,52 @@
   ],
   "needs": [
     {
+      "id": "1781682980997",
+      "title": "Automated Checklist Test Task",
+      "description": "This is a test task for verification of checklists",
+      "location": "Downtown Community Center",
+      "taskLocationDetails": "Room 101",
+      "requiredVolunteerCount": 2,
+      "status": "open",
+      "createdAt": "2026-06-17T07:56:20.997Z",
+      "createdBy": "admin",
+      "requests": [],
+      "aiAnalysis": {
+        "urgency": "Medium",
+        "skills": [
+          "General Volunteer"
+        ],
+        "reason": "AI matching offline. Local rule-based analyzer detected key urgency signals and skills."
+      },
+      "assignedVolunteers": [],
+      "checklist": [
+        {
+          "id": "c_prep_1781682980998",
+          "text": "Preparation & site check-in",
+          "completed": false,
+          "completedBy": null
+        },
+        {
+          "id": "c_exec_1781682980998",
+          "text": "Execute primary task operations",
+          "completed": false,
+          "completedBy": null
+        },
+        {
+          "id": "c_cleanup_1781682980998",
+          "text": "Clean up & final reporting",
+          "completed": false,
+          "completedBy": null
+        },
+        {
+          "id": "c_1781682981005_r8yub",
+          "text": "Verify automated checklist test item",
+          "completed": true,
+          "completedBy": "admin"
+        }
+      ]
+    },
+    {
       "id": "1781682077926",
       "title": "Automated Checklist Test Task",
       "description": "This is a test task for verification of checklists",
