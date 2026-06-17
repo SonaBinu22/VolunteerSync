@@ -40,7 +40,13 @@ const API = {
     getAdminProfile() { return this.fetchWrap('/admin/profile'); },
     updateAdminProfile(data) { return this.fetchWrap('/admin/profile', { method: 'PUT', body: JSON.stringify(data) }); },
     getVolunteerProfile() { return this.fetchWrap('/volunteer/profile'); },
-    updateVolunteerProfile(data) { return this.fetchWrap('/volunteer/profile', { method: 'PUT', body: JSON.stringify(data) }); }
+    updateVolunteerProfile(data) { return this.fetchWrap('/volunteer/profile', { method: 'PUT', body: JSON.stringify(data) }); },
+    
+    getChatHistory(needId) { return this.fetchWrap(`/chat/history?needId=${needId}`); },
+    sendChatMessage(needId, text) { return this.fetchWrap('/chat/send', { method: 'POST', body: JSON.stringify({ needId, text }) }); },
+    submitReview(volunteerUsername, rating, comment, needId) { 
+        return this.fetchWrap('/volunteers/review', { method: 'POST', body: JSON.stringify({ volunteerUsername, rating, comment, needId }) }); 
+    }
 };
 
 window.API = API;

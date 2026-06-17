@@ -40,7 +40,8 @@ const volunteers = [
         gender: "Female",
         profilePic: "https://ui-avatars.com/api/?name=Alice+Johnson&background=random",
         skills: "Organization, Communication, Teaching",
-        availability: "Weekends"
+        availability: "Weekends",
+        reviews: []
     },
     {
         username: "v-bob", password: "password123",
@@ -53,13 +54,16 @@ const volunteers = [
         gender: "Male",
         profilePic: "https://ui-avatars.com/api/?name=Bob+Smith&background=random",
         skills: "Physical Stamina, Driving, Gardening",
-        availability: "Saturdays, Evenings"
+        availability: "Saturdays, Evenings",
+        reviews: []
     }
 ];
 
+const messages = [];
+
 function saveData() {
     try {
-        fs.writeFileSync(DB_PATH, JSON.stringify({ admins, needs, volunteers }, null, 2), 'utf8');
+        fs.writeFileSync(DB_PATH, JSON.stringify({ admins, needs, volunteers, messages }, null, 2), 'utf8');
     } catch (e) {
         console.error("Failed to write to db.json", e);
     }
@@ -72,6 +76,7 @@ if (fs.existsSync(DB_PATH)) {
         if (fileData.admins) admins.splice(0, admins.length, ...fileData.admins);
         if (fileData.needs) needs.splice(0, needs.length, ...fileData.needs);
         if (fileData.volunteers) volunteers.splice(0, volunteers.length, ...fileData.volunteers);
+        if (fileData.messages) messages.splice(0, messages.length, ...fileData.messages);
     } catch (e) {
         console.error("Failed to load db.json, using defaults.", e);
     }
@@ -84,5 +89,6 @@ module.exports = {
     admins,
     needs,
     volunteers,
+    messages,
     saveData
 };

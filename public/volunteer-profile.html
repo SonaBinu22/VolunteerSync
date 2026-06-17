@@ -25,6 +25,13 @@
                 <div class="form-group full-width" style="text-align:center; border-bottom: 2px solid rgba(255,255,255,0.08); padding-bottom:1.5rem; margin-bottom:1.5rem; display:flex; flex-direction:column; align-items:center; gap:0.75rem;">
                     <img id="displayAvatar" src="" style="width:90px; height:90px; border-radius:50%; object-fit:cover; border:3px solid rgba(255,255,255,0.15); box-shadow: 0 4px 10px rgba(0,0,0,0.3)">
                     <h3 style="color:var(--text-main); font-family:'Outfit'">Account: <span id="displayUsername" style="color:var(--primary)"></span></h3>
+                    <div style="margin-top:0.25rem; display:flex; flex-direction:column; align-items:center; gap:0.25rem;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="color:#f59e0b; font-weight:700;" id="profileAvgRating">⭐ 5.0</span>
+                            <span style="font-size:0.75rem; color:var(--text-light)" id="profileReviewCount">(0 reviews)</span>
+                        </div>
+                        <div id="profileBadges" style="display:flex; flex-wrap:wrap; justify-content:center; gap:4px; margin-top:0.25rem;"></div>
+                    </div>
                 </div>
 
                 <div class="form-group full-width">
@@ -86,6 +93,13 @@
                 <div class="form-group full-width">
                     <label class="form-label" for="vAvailability">Availability *</label>
                     <input type="text" id="vAvailability" class="form-control" required placeholder="e.g. Weekends, Evenings">
+                </div>
+
+                <div class="form-group full-width" style="border-top:2px solid rgba(255,255,255,0.08); padding-top:1.5rem; margin-top:1rem;">
+                    <h3 style="font-family:'Outfit'; color:var(--primary); margin-bottom:1rem">My Reviews & Feedback</h3>
+                    <div id="myReviewsList" style="display:flex; flex-direction:column; gap:0.75rem; max-height: 250px; overflow-y: auto; padding-right: 0.5rem;">
+                        <p style="color:var(--text-light); font-size:0.9rem; font-style:italic">No reviews submitted yet.</p>
+                    </div>
                 </div>
 
                 <div class="full-width" style="display:flex; gap:1rem; margin-top:1rem;">
@@ -150,6 +164,41 @@
             reader.readAsDataURL(file);
         }
 
+        function getVolunteerRatingInfo(volunteer) {
+            const reviews = (volunteer && volunteer.reviews) || [];
+            if (reviews.length === 0) return { avg: "5.0", count: 0, stars: "⭐⭐⭐⭐⭐" };
+            
+            const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
+            const avg = (sum / reviews.length).toFixed(1);
+            const rounded = Math.round(sum / reviews.length);
+            const stars = "⭐".repeat(rounded) + "☆".repeat(5 - rounded);
+            return { avg, count: reviews.length, stars };
+        }
+
+        function getVolunteerBadges(volunteer, needsCount) {
+            const list = [];
+            const skillsLower = ((volunteer && volunteer.skills) || '').toLowerCase();
+            
+            if (needsCount > 0) {
+                list.push({ label: "Helper", class: "badge-helper" });
+            }
+            
+            const ratingInfo = getVolunteerRatingInfo(volunteer);
+            if (needsCount >= 3 || (ratingInfo.count >= 2 && parseFloat(ratingInfo.avg) >= 4.7)) {
+                list.push({ label: "Community Hero", class: "badge-hero" });
+            }
+            
+            if (skillsLower.includes("nurse") || skillsLower.includes("first aid") || skillsLower.includes("medical")) {
+                list.push({ label: "Medical Shield", class: "badge-medical" });
+            }
+            
+            if (skillsLower.includes("driver") || skillsLower.includes("lifting") || skillsLower.includes("driving") || skillsLower.includes("stamina")) {
+                list.push({ label: "Logistics Specialist", class: "badge-logistics" });
+            }
+            
+            return list;
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             if (!Auth.isVolunteer()) {
                 document.getElementById('profileWrapper').style.display = 'none';
@@ -159,7 +208,11 @@
             document.getElementById('profileWrapper').style.display = 'block';
             document.getElementById('unauthMessage').style.display = 'none';
             try {
-                const profile = await API.getVolunteerProfile();
+                const [profile, needs] = await Promise.all([
+                    API.getVolunteerProfile(),
+                    API.getNeeds()
+                ]);
+                
                 document.getElementById('displayAvatar').src = profile.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name)}&background=random`;
                 document.getElementById('displayUsername').innerText = profile.username;
                 document.getElementById('vName').value = profile.name || '';
@@ -177,6 +230,43 @@
                 
                 document.getElementById('vSkills').value = profile.skills || '';
                 document.getElementById('vAvailability').value = profile.availability || '';
+                
+                // Render rating stats
+                const ratingInfo = getVolunteerRatingInfo(profile);
+                document.getElementById('profileAvgRating').innerText = `⭐ ${ratingInfo.avg}`;
+                document.getElementById('profileReviewCount').innerText = `(${ratingInfo.count} reviews)`;
+                
+                // Render badges
+                const completedTasksCount = needs.filter(n => 
+                    (n.status === 'completed' || n.status === 'matched') && 
+                    n.assignedVolunteers && 
+                    n.assignedVolunteers.some(av => av.id === profile.id)
+                ).length;
+                const badges = getVolunteerBadges(profile, completedTasksCount);
+                const badgesDiv = document.getElementById('profileBadges');
+                if (badges.length > 0) {
+                    badgesDiv.innerHTML = badges.map(b => `<span class="badge ${b.class}" style="font-size:0.7rem; padding: 2px 8px;">${b.label}</span>`).join('');
+                } else {
+                    badgesDiv.innerHTML = '<span style="font-size:0.75rem; color:var(--text-light); font-style:italic">No badges earned yet</span>';
+                }
+
+                // Render reviews list
+                const reviewsListDiv = document.getElementById('myReviewsList');
+                if (profile.reviews && profile.reviews.length > 0) {
+                    reviewsListDiv.innerHTML = profile.reviews.map(r => `
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); padding:0.75rem 1rem; border-radius:10px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">
+                                <span style="font-weight:600; color:var(--text-main)">Reviewed by Admin: ${r.reviewer}</span>
+                                <span style="color:#f59e0b; font-weight:700;">⭐ ${r.rating}.0</span>
+                            </div>
+                            <p style="color:var(--text-light); font-size:0.9rem; line-height:1.4;">${r.comment || '<span style="font-style:italic">No comments left</span>'}</p>
+                            <span style="font-size:0.75rem; color:var(--text-light); display:block; margin-top:0.25rem;">🕒 ${new Date(r.timestamp).toLocaleDateString()}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    reviewsListDiv.innerHTML = '<p style="color:var(--text-light); font-size:0.9rem; font-style:italic">No reviews submitted yet.</p>';
+                }
+                
             } catch(e) { console.error(e); }
         });
 

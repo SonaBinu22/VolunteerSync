@@ -42,6 +42,8 @@ function broadcastEvent(data) {
     }
 }
 
+global.broadcastEvent = broadcastEvent;
+
 const server = http.createServer(async (req, res) => {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -78,7 +80,7 @@ const server = http.createServer(async (req, res) => {
         saveData();
 
         // Broadcast a real-time update event to all active client tabs if database is mutated
-        if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
+        if (['POST', 'PUT', 'DELETE'].includes(req.method) && !req.url.includes('/api/chat/send') && !req.url.includes('/api/volunteers/review')) {
             broadcastEvent({ type: 'update', method: req.method, url: req.url });
         }
         return;

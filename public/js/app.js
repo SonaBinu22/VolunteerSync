@@ -3,11 +3,212 @@ let globalAdmins = [];
 let globalVolunteers = [];
 let cachedNeeds = [];
 
+let map = null;
+let mapMarkers = [];
+let notificationLogs = [];
+let activeChatNeedId = null;
+
+// Helper to calculate reputation stats for volunteers
+function getVolunteerRatingInfo(volunteer) {
+    const reviews = (volunteer && volunteer.reviews) || [];
+    if (reviews.length === 0) return { avg: "5.0", count: 0, stars: "⭐⭐⭐⭐⭐" };
+    
+    const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
+    const avg = (sum / reviews.length).toFixed(1);
+    const rounded = Math.round(sum / reviews.length);
+    const stars = "⭐".repeat(rounded) + "☆".repeat(5 - rounded);
+    return { avg, count: reviews.length, stars };
+}
+
+function getVolunteerBadges(volunteer, needsCount) {
+    const list = [];
+    const skillsLower = ((volunteer && volunteer.skills) || '').toLowerCase();
+    
+    if (needsCount > 0) {
+        list.push({ label: "Helper", class: "badge-helper" });
+    }
+    
+    const ratingInfo = getVolunteerRatingInfo(volunteer);
+    if (needsCount >= 3 || (ratingInfo.count >= 2 && parseFloat(ratingInfo.avg) >= 4.7)) {
+        list.push({ label: "Community Hero", class: "badge-hero" });
+    }
+    
+    if (skillsLower.includes("nurse") || skillsLower.includes("first aid") || skillsLower.includes("medical")) {
+        list.push({ label: "Medical Shield", class: "badge-medical" });
+    }
+    
+    if (skillsLower.includes("driver") || skillsLower.includes("lifting") || skillsLower.includes("driving") || skillsLower.includes("stamina")) {
+        list.push({ label: "Logistics Specialist", class: "badge-logistics" });
+    }
+    
+    return list;
+}
+
+// Map initialization & rendering
+function initMap() {
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer || typeof L === 'undefined') return;
+    if (map) return; 
+
+    map = L.map('map', {
+        zoomControl: true,
+        scrollWheelZoom: false
+    }).setView([40.7306, -73.9352], 13);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
+    }).addTo(map);
+}
+
+function getCoordinates(locationStr) {
+    const clean = (locationStr || '').toLowerCase();
+    if (clean.includes('community center') || clean.includes('downtown')) {
+        return [40.7306 + (Math.random() - 0.5) * 0.01, -73.9352 + (Math.random() - 0.5) * 0.01];
+    }
+    if (clean.includes('central park')) {
+        return [40.7829 + (Math.random() - 0.5) * 0.005, -73.9654 + (Math.random() - 0.5) * 0.005];
+    }
+    if (clean.includes('northside')) {
+        return [40.7484 + (Math.random() - 0.5) * 0.01, -73.9857 + (Math.random() - 0.5) * 0.01];
+    }
+    if (clean.includes('springfield')) {
+        return [40.7589 + (Math.random() - 0.5) * 0.01, -73.9851 + (Math.random() - 0.5) * 0.01];
+    }
+    
+    const hash = clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const latOffset = (hash % 100) / 5000 - 0.01;
+    const lngOffset = (hash % 80) / 4000 - 0.01;
+    return [40.7306 + latOffset, -73.9352 + lngOffset];
+}
+
+function updateMapMarkers(needsList) {
+    if (!map || typeof L === 'undefined') return;
+
+    mapMarkers.forEach(m => map.removeLayer(m));
+    mapMarkers = [];
+
+    needsList.forEach(need => {
+        const coords = getCoordinates(need.location);
+        const ai = need.aiAnalysis || {};
+        const urgency = (ai.urgency || 'Low').toLowerCase();
+        
+        let markerColor = '#6366f1'; 
+        if (urgency === 'high') markerColor = '#ef4444'; 
+        if (urgency === 'medium') markerColor = '#f59e0b'; 
+
+        const customIcon = L.divIcon({
+            className: 'custom-map-marker',
+            html: `<div style="background-color: ${markerColor}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 10px ${markerColor};"></div>`,
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+        });
+
+        const marker = L.marker(coords, { icon: customIcon }).addTo(map);
+        
+        const popupContent = `
+            <div style="font-family:'Inter'; line-height:1.4; padding:2px;">
+                <strong style="color:var(--text-main); font-size:0.95rem; font-family:'Outfit';">${need.title}</strong>
+                <div style="margin: 4px 0 8px 0; font-size: 0.75rem; color:var(--text-light)">📍 ${need.location}</div>
+                <div style="font-size:0.8rem; margin-bottom:8px;">Urgency: <strong style="text-transform:uppercase;">${urgency}</strong></div>
+                <button onclick="scrollToCard('${need.id}')" style="background:var(--primary); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:0.75rem; cursor:pointer; font-weight:600; width:100%;">View Task</button>
+            </div>
+        `;
+        marker.bindPopup(popupContent);
+        mapMarkers.push(marker);
+    });
+
+    if (Auth.isVolunteer()) {
+        const currentVol = globalVolunteers.find(v => v.username === Auth.getToken());
+        if (currentVol) {
+            const coords = getCoordinates(currentVol.currentLocation || currentVol.address);
+            const volunteerIcon = L.divIcon({
+                className: 'custom-map-marker-vol',
+                html: `<div style="background-color: #3b82f6; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 12px #3b82f6; position:relative;"><span style="position:absolute; width:100%; height:100%; border-radius:50%; border:2px solid #3b82f6; transform:scale(2); opacity:0.4; animation: pulse 2s infinite;"></span></div>`,
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+            const volMarker = L.marker(coords, { icon: volunteerIcon }).addTo(map);
+            volMarker.bindPopup(`<strong>My Location</strong><br>📍 ${currentVol.currentLocation || 'Springfield'}`);
+            mapMarkers.push(volMarker);
+        }
+    }
+}
+
+window.scrollToCard = (id) => {
+    const card = document.getElementById(`need-card-${id}`);
+    if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.style.borderColor = 'var(--primary)';
+        card.style.boxShadow = 'var(--shadow-hover)';
+        setTimeout(() => {
+            card.style.borderColor = '';
+            card.style.boxShadow = '';
+        }, 2500);
+    }
+};
+
+// Notification Log Helpers
+function addNotificationLog(text) {
+    notificationLogs.unshift({
+        text,
+        timestamp: new Date().toLocaleTimeString()
+    });
+    
+    const drawer = document.getElementById('notificationDrawer');
+    if (drawer && !drawer.classList.contains('open')) {
+        const badge = document.getElementById('notificationBadge');
+        if (badge) {
+            const currentCount = parseInt(badge.innerText) || 0;
+            badge.innerText = currentCount + 1;
+            badge.style.display = 'inline-block';
+        }
+    }
+
+    renderNotificationLogs();
+}
+
+function renderNotificationLogs() {
+    const content = document.getElementById('drawerContent');
+    if (!content) return;
+
+    if (notificationLogs.length === 0) {
+        content.innerHTML = `<p style="color:var(--text-light); font-size:0.9rem; text-align:center;">No recent activities logged in this session.</p>`;
+        return;
+    }
+
+    content.innerHTML = notificationLogs.map(log => `
+        <div class="notification-item">
+            <div>${log.text}</div>
+            <span class="notification-time">🕒 ${log.timestamp}</span>
+        </div>
+    `).join('');
+}
+
+window.toggleNotificationDrawer = (show) => {
+    const drawer = document.getElementById('notificationDrawer');
+    const badge = document.getElementById('notificationBadge');
+    if (!drawer) return;
+
+    if (show === undefined) {
+        drawer.classList.toggle('open');
+    } else if (show) {
+        drawer.classList.add('open');
+    } else {
+        drawer.classList.remove('open');
+    }
+
+    if (drawer.classList.contains('open') && badge) {
+        badge.innerText = '0';
+        badge.style.display = 'none';
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('needsGrid')) {
         loadNeeds();
         
-        // Wire up filter event listeners
         const searchInput = document.getElementById('searchNeeds');
         const urgencySelect = document.getElementById('filterUrgency');
         const statusSelect = document.getElementById('filterStatus');
@@ -17,7 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (statusSelect) statusSelect.onchange = filterAndRenderNeeds;
     }
     
-    // Connect to real-time updates via Server-Sent Events (SSE)
     if (typeof EventSource !== 'undefined') {
         const eventSource = new EventSource('/api/events');
         eventSource.onmessage = (event) => {
@@ -25,11 +225,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'update') {
                     console.log('Live update received:', data);
+                    addNotificationLog(`📢 System list updated (${data.method || 'GET'} on ${data.url})`);
                     if (document.getElementById('needsGrid')) {
                         loadNeeds();
                     }
                     if (document.getElementById('vGrid') && typeof loadVolunteers === 'function') {
                         loadVolunteers();
+                    }
+                } else if (data.type === 'chat') {
+                    console.log('Chat update received:', data);
+                    if (activeChatNeedId === data.needId) {
+                        loadChatHistory(data.needId);
+                    } else {
+                        const needObj = cachedNeeds.find(n => n.id === data.needId);
+                        const title = needObj ? needObj.title : 'assigned task';
+                        addNotificationLog(`💬 Chat update: message from ${data.message.senderName} on "${title}"`);
+                    }
+                } else if (data.type === 'review') {
+                    console.log('Review update received:', data);
+                    addNotificationLog(`🎖️ New review left for volunteer: ${data.volunteer.name} (Rating: ${data.review.rating}/5)`);
+                    if (document.getElementById('needsGrid')) {
+                        loadNeeds();
                     }
                 }
             } catch (e) {
@@ -44,11 +260,14 @@ async function loadNeeds() {
     try {
         const [needs, globalData] = await Promise.all([
             API.getNeeds(),
-            API.getGlobalData() // { needs, volunteers, admins }
+            API.getGlobalData()
         ]);
         globalAdmins = globalData.admins;
         globalVolunteers = globalData.volunteers;
         cachedNeeds = needs;
+
+        initMap();
+        updateMapMarkers(needs);
 
         renderRoleBanner(needs);
         filterAndRenderNeeds();
@@ -61,7 +280,6 @@ function filterAndRenderNeeds() {
     const grid = document.getElementById('needsGrid');
     if (!grid) return;
 
-    // Get filter inputs if they exist in the HTML
     const searchVal = document.getElementById('searchNeeds')?.value.toLowerCase() || '';
     const urgencyVal = document.getElementById('filterUrgency')?.value || '';
     const statusVal = document.getElementById('filterStatus')?.value || '';
@@ -71,17 +289,14 @@ function filterAndRenderNeeds() {
         const descMatch = need.description.toLowerCase().includes(searchVal);
         const locMatch = need.location.toLowerCase().includes(searchVal);
         
-        // Match search text against title, description, or location
         const textMatch = titleMatch || descMatch || locMatch;
-        
-        // Match urgency
         const urgencyMatch = !urgencyVal || (need.aiAnalysis && need.aiAnalysis.urgency && need.aiAnalysis.urgency.toLowerCase() === urgencyVal.toLowerCase());
-        
-        // Match status
         const statusMatch = !statusVal || (need.status === statusVal);
 
         return textMatch && urgencyMatch && statusMatch;
     });
+
+    updateMapMarkers(filtered);
 
     if (filtered.length === 0) {
         grid.innerHTML = '<p style="text-align:center; grid-column:1/-1; color: var(--text-light); margin-top:2rem;">No tasks matching the criteria found.</p>';
@@ -237,12 +452,16 @@ function createNeedCard(need) {
     
     let assignedSection = '';
     if (assignedVolunteers.length > 0) {
-        let labels = assignedVolunteers.map(v => `
-            <div class="assigned-badge-detailed" title="View Profile">
-                ${v.pic ? `<img src="${v.pic}" alt="Avatar"/>` : ''}
-                <span>${v.name}</span>
-            </div>
-        `).join('');
+        let labels = assignedVolunteers.map(v => {
+            const vData = globalVolunteers.find(gv => gv.id === v.id);
+            const ratingInfo = getVolunteerRatingInfo(vData);
+            return `
+                <div class="assigned-badge-detailed" title="Reputation: ⭐ ${ratingInfo.avg} (${ratingInfo.count} reviews)">
+                    ${v.pic ? `<img src="${v.pic}" alt="Avatar"/>` : ''}
+                    <span>${v.name} (⭐ ${ratingInfo.avg})</span>
+                </div>
+            `;
+        }).join('');
 
         assignedSection = `
             <div class="assigned-section">
@@ -272,13 +491,14 @@ function createNeedCard(need) {
                             if (matchPercent < 75) scoreColor = '#f59e0b'; // Amber for medium
                             if (matchPercent < 55) scoreColor = '#ef4444'; // Red for low
 
+                            const ratingInfo = getVolunteerRatingInfo(vData);
                             reqHtml += `
-                            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:0.5rem 0.75rem; border-radius:8px; margin-bottom:0.5rem; flex-wrap:wrap; gap:0.5rem;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:0.5rem 0.75rem; border-radius:8px; margin-bottom:0.5rem; flex-wrap:wrap; gap:0.5rem; width:100%;">
                                 <div style="display:flex; align-items:center; gap:10px">
                                    <img src="${vData.profilePic}" style="width:28px; height:28px; border-radius:50%; object-fit:cover;">
                                    <div>
                                        <span style="font-size:0.9rem; font-weight:600; color:var(--text-main);">${vData.name}</span>
-                                       <span style="display:block; font-size:0.75rem; font-weight:700; color:${scoreColor}">${matchPercent}% Match</span>
+                                       <span style="display:block; font-size:0.75rem; font-weight:700; color:${scoreColor}">${matchPercent}% Match | ⭐ ${ratingInfo.avg} (${ratingInfo.count} reviews)</span>
                                    </div>
                                 </div>
                                 <button class="btn" style="padding:0.35rem 0.85rem; font-size:0.8rem; box-shadow:none;" onclick="approveJoin('${need.id}', '${vData.username}')">Approve</button>
@@ -312,14 +532,20 @@ function createNeedCard(need) {
                  } else {
                      actionArea = `<button disabled class="btn btn-full btn-disabled" style="margin-top:auto">Task Full</button>`;
                  }
-            }
+             }
         } else {
              actionArea = `<button disabled class="btn btn-full btn-disabled" style="margin-top:auto">Login to Join</button>`;
         }
     }
 
+    const isChatAvailable = (Auth.isAdmin() && need.createdBy === Auth.getToken() && need.assignedVolunteers.length > 0) ||
+                           (Auth.isVolunteer() && need.assignedVolunteers.some(v => v.id === globalVolunteers.find(gv => gv.username === Auth.getToken())?.id));
+
+    const chatButton = isChatAvailable ? 
+        `<button onclick="openChatModal('${need.id}', '${need.title.replace(/'/g, "\\'")}')" class="btn btn-full" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.35); color:#a5b4fc; box-shadow:none; margin-top:0.5rem;">💬 Chat Hub</button>` : '';
+
     return `
-        <div class="card need-card">
+        <div class="card need-card" id="need-card-${need.id}">
             <div class="card-header">
                 <div class="card-title">${need.title}</div>
                 ${scoreBadge}
@@ -346,6 +572,7 @@ function createNeedCard(need) {
                 ${assignedSection}
             </div>
             
+            ${chatButton}
             ${actionArea}
         </div>
     `;
@@ -371,8 +598,173 @@ window.approveJoin = async (needId, volUsername) => {
 };
 
 window.markComplete = async (needId) => {
+    const need = cachedNeeds.find(n => n.id === needId);
+    if (!need) return;
+
+    if (need.assignedVolunteers && need.assignedVolunteers.length > 0) {
+        const assignedVol = need.assignedVolunteers[0];
+        const volFull = globalVolunteers.find(v => v.id === assignedVol.id);
+        if (volFull) {
+            openReviewModal(volFull.username, volFull.name, needId);
+            return;
+        }
+    }
+
     if(!confirm("Are you sure? This will finalize the task and boost your Admin reputation score.")) return;
     await showSpinner("Finalizing...");
     try { await API.completeTask(needId); await loadNeeds(); } 
     catch (err) { alert(err.message); } finally { hideSpinner(); }
+};
+
+// Chat Modal Handlers
+window.openChatModal = async (needId, needTitle) => {
+    activeChatNeedId = needId;
+    document.getElementById('chatNeedTitle').innerText = `💬 Chat: ${needTitle}`;
+    document.getElementById('chatModalOverlay').classList.add('open');
+    document.getElementById('chatInputMessage').focus();
+    
+    await loadChatHistory(needId);
+    
+    const log = document.getElementById('chatMessagesLog');
+    if (log) log.scrollTop = log.scrollHeight;
+};
+
+window.closeChatModal = () => {
+    activeChatNeedId = null;
+    document.getElementById('chatModalOverlay').classList.remove('open');
+};
+
+async function loadChatHistory(needId) {
+    if (activeChatNeedId !== needId) return;
+    try {
+        const history = await API.getChatHistory(needId);
+        renderChatMessages(history);
+    } catch (e) {
+        console.error("Failed to load chat history:", e);
+    }
+}
+
+function renderChatMessages(messagesList) {
+    const log = document.getElementById('chatMessagesLog');
+    if (!log) return;
+
+    if (messagesList.length === 0) {
+        log.innerHTML = `<p style="color:var(--text-light); text-align:center; font-size:0.85rem; margin-top:2rem;">No messages yet. Send a message to start coordinating!</p>`;
+        return;
+    }
+
+    const currentUsername = Auth.getToken();
+    log.innerHTML = messagesList.map(msg => {
+        const isSent = msg.sender === currentUsername;
+        const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        return `
+            <div class="chat-bubble ${isSent ? 'sent' : 'received'}">
+                ${!isSent ? `<span class="chat-meta">${msg.senderName} (${msg.senderRole})</span>` : ''}
+                <div>${msg.text}</div>
+                <span style="font-size: 0.65rem; display: block; text-align: right; opacity: 0.6; margin-top: 4px;">${time}</span>
+            </div>
+        `;
+    }).join('');
+    
+    log.scrollTop = log.scrollHeight;
+}
+
+window.sendChatMessage = async () => {
+    const input = document.getElementById('chatInputMessage');
+    if (!input || !input.value.trim() || !activeChatNeedId) return;
+
+    const text = input.value.trim();
+    input.value = '';
+
+    try {
+        await API.sendChatMessage(activeChatNeedId, text);
+        await loadChatHistory(activeChatNeedId);
+    } catch (e) {
+        alert("Failed to send message: " + e.message);
+    }
+};
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'chatInputMessage') {
+        sendChatMessage();
+    }
+});
+
+// Review Modal Handlers
+window.openReviewModal = (volUsername, volName, needId) => {
+    document.getElementById('reviewVolunteerUsername').value = volUsername;
+    document.getElementById('reviewVolunteerName').innerText = volName;
+    document.getElementById('reviewNeedId').value = needId;
+    
+    document.getElementById('reviewForm').reset();
+    document.getElementById('reviewModalOverlay').classList.add('open');
+};
+
+window.closeReviewModal = () => {
+    document.getElementById('reviewModalOverlay').classList.remove('open');
+};
+
+window.submitVolunteerReview = async (event) => {
+    event.preventDefault();
+    const volunteerUsername = document.getElementById('reviewVolunteerUsername').value;
+    const needId = document.getElementById('reviewNeedId').value;
+    const comment = document.getElementById('reviewComment').value;
+    
+    const ratingRadios = document.getElementsByName('reviewRating');
+    let rating = 5;
+    for (const radio of ratingRadios) {
+        if (radio.checked) {
+            rating = radio.value;
+            break;
+        }
+    }
+
+    await showSpinner("Submitting Review...");
+    try {
+        await API.submitReview(volunteerUsername, rating, comment, needId);
+        await API.completeTask(needId);
+        
+        closeReviewModal();
+        await loadNeeds();
+        alert("Task Completed & Volunteer Reviewed Successfully!");
+    } catch (err) {
+        alert("Review failed: " + err.message);
+    } finally {
+        hideSpinner();
+    }
+};
+
+// CSV Export Handler
+window.exportReportCSV = () => {
+    if (!Auth.isAdmin()) return;
+
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Task ID,Task Title,Urgency,Status,Location,Created By,Assigned Volunteers Count,Created Date\r\n";
+
+    cachedNeeds.forEach(need => {
+        const assignedCount = need.assignedVolunteers ? need.assignedVolunteers.length : 0;
+        const urgency = need.aiAnalysis ? need.aiAnalysis.urgency : "Medium";
+        const date = new Date(need.createdAt).toLocaleDateString();
+        
+        const row = [
+            `"${need.id}"`,
+            `"${need.title.replace(/"/g, '""')}"`,
+            `"${urgency}"`,
+            `"${need.status}"`,
+            `"${need.location.replace(/"/g, '""')}"`,
+            `"${need.createdBy}"`,
+            assignedCount,
+            `"${date}"`
+        ];
+        csvContent += row.join(",") + "\r\n";
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `VolunteerSync_Impact_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 };

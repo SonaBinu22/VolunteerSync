@@ -1,4 +1,4 @@
-const { needs, volunteers, admins, saveData } = require('../services/dataStore');
+const { needs, volunteers, admins, messages, saveData } = require('../services/dataStore');
 const geminiService = require('../services/gemini');
 
 const parseBody = (req) => {
@@ -58,7 +58,8 @@ module.exports = async function apiHandler(req, res) {
             const newVolunteer = {
                 username, password, id: 'v' + Date.now().toString(),
                 name, address, phone, currentLocation: currentLocation || address, 
-                bloodGroup, gender, profilePic: picUrl, skills, availability
+                bloodGroup, gender, profilePic: picUrl, skills, availability,
+                reviews: []
             };
             volunteers.push(newVolunteer);
             return sendJson(res, 201, newVolunteer);
@@ -217,6 +218,79 @@ module.exports = async function apiHandler(req, res) {
             need.matchReason = matchResult.reason || "Auto-matched by AI.";
             return sendJson(res, 200, { need });
         } catch(e){ return sendJson(res,500,{error:'fail'}); }
+    }
+
+    if (method === 'GET' && url === '/api/chat/history') {
+        const parsedUrl = new URL(req.url, 'http://localhost');
+        const needId = parsedUrl.searchParams.get('needId');
+        if (!needId) return sendJson(res, 400, { error: 'needId required' });
+        const history = messages.filter(m => m.needId === needId);
+        return sendJson(res, 200, history);
+    }
+
+    if (method === 'POST' && url === '/api/chat/send') {
+        try {
+            const { needId, text } = await parseBody(req);
+            if (!needId || !text) return sendJson(res, 400, { error: 'needId and text required' });
+            const senderUsername = token;
+            const senderRole = role;
+            if (!senderUsername) return sendJson(res, 401, { error: 'Unauthorized' });
+            
+            let senderName = senderUsername;
+            if (senderRole === 'admin') {
+                const adm = admins.find(a => a.username === senderUsername);
+                if (adm) senderName = adm.name || adm.username;
+            } else {
+                const vol = volunteers.find(v => v.username === senderUsername);
+                if (vol) senderName = vol.name || vol.username;
+            }
+            
+            const messageObj = {
+                id: Date.now().toString(),
+                needId,
+                sender: senderUsername,
+                senderName,
+                senderRole,
+                text,
+                timestamp: new Date().toISOString()
+            };
+            messages.push(messageObj);
+            
+            if (global.broadcastEvent) {
+                global.broadcastEvent({ type: 'chat', needId, message: messageObj });
+            }
+            
+            return sendJson(res, 201, messageObj);
+        } catch(e) {
+            return sendJson(res, 500, { error: 'Error sending message' });
+        }
+    }
+
+    if (method === 'POST' && url === '/api/volunteers/review') {
+        if (role !== 'admin') return sendJson(res, 403, { error: 'Only admins can review volunteers' });
+        try {
+            const { volunteerUsername, rating, comment, needId } = await parseBody(req);
+            if (!volunteerUsername || !rating) return sendJson(res, 400, { error: 'volunteerUsername and rating required' });
+            const vol = volunteers.find(v => v.username === volunteerUsername);
+            if (!vol) return sendJson(res, 404, { error: 'Volunteer not found' });
+            if (!vol.reviews) vol.reviews = [];
+            const newReview = {
+                reviewer: token,
+                rating: parseFloat(rating) || 5.0,
+                comment: comment || '',
+                needId: needId || '',
+                timestamp: new Date().toISOString()
+            };
+            vol.reviews.push(newReview);
+            
+            if (global.broadcastEvent) {
+                global.broadcastEvent({ type: 'review', volunteerUsername, review: newReview, volunteer: vol });
+            }
+            
+            return sendJson(res, 200, { message: 'Review added successfully', volunteer: vol });
+        } catch(e) {
+            return sendJson(res, 500, { error: 'Error submitting review' });
+        }
     }
 
     return sendJson(res, 404, { error: 'API Route Not Found' });

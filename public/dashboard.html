@@ -6,6 +6,8 @@
     <title>VolunteerSync - Dashboard</title>
     <!-- Google Fonts for modern typography -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -25,9 +27,21 @@
 
     <div class="container">
         <div id="roleHeaderBanner"></div>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        
+        <!-- Interactive Leaflet Map Area -->
+        <div id="map"></div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
             <h1 class="page-title" style="margin-bottom: 0;">Community Needs Dashboard</h1>
-            <a href="add-need.html" id="addNeedBtn" class="btn" style="display: none;">+ Add Need</a>
+            <div style="display: flex; gap: 0.75rem; align-items: center;">
+                <button id="notificationToggleBtn" class="btn" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: var(--text-main); box-shadow: none;">
+                    🔔 Notifications <span id="notificationBadge" style="display:none; background:var(--accent); color:white; padding:1px 6px; border-radius:10px; font-size:0.75rem; margin-left:4px; font-weight:700;">0</span>
+                </button>
+                <button id="downloadReportBtn" class="btn" style="display: none; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #6ee7b7; box-shadow: none;" onclick="exportReportCSV()">
+                    📥 Export Report (CSV)
+                </button>
+                <a href="add-need.html" id="addNeedBtn" class="btn" style="display: none;">+ Add Need</a>
+            </div>
         </div>
         
         <!-- Search & Filter Controls -->
@@ -66,14 +80,83 @@
         <div id="spinnerText" style="font-weight: 500; color: var(--text-main);">Processing...</div>
     </div>
 
+    <!-- Notification Slide-out Drawer -->
+    <div id="notificationDrawer" class="drawer">
+        <div class="drawer-header">
+            <div class="drawer-title">Activity Feed</div>
+            <button class="drawer-close" onclick="toggleNotificationDrawer(false)">&times;</button>
+        </div>
+        <div id="drawerContent" class="drawer-content">
+            <p style="color:var(--text-light); font-size:0.9rem; text-align:center;">No recent activities logged in this session.</p>
+        </div>
+    </div>
+
+    <!-- Chat Modal Overlay -->
+    <div id="chatModalOverlay" class="modal-overlay">
+        <div class="chat-modal">
+            <div class="chat-header">
+                <div class="chat-title" id="chatNeedTitle">Task Chat Hub</div>
+                <button class="chat-close" onclick="closeChatModal()">&times;</button>
+            </div>
+            <div id="chatMessagesLog" class="chat-messages">
+                <!-- Chat message bubbles dynamically injected here -->
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chatInputMessage" class="form-control" placeholder="Type a message and press Enter..." style="margin-bottom: 0;">
+                <button class="btn" onclick="sendChatMessage()" style="padding: 0.85rem 1.25rem; box-shadow: none;">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Volunteer Review Modal Overlay -->
+    <div id="reviewModalOverlay" class="modal-overlay">
+        <div class="review-modal-content">
+            <h2 style="font-family:'Outfit'; margin-bottom: 0.5rem; text-align: center;">Rate Assigned Volunteer</h2>
+            <p style="color:var(--text-light); text-align:center; font-size:0.9rem; margin-bottom: 1rem;">Leave reviews and feedback for: <strong id="reviewVolunteerName" style="color:var(--text-main)"></strong></p>
+            
+            <form id="reviewForm" onsubmit="submitVolunteerReview(event)">
+                <input type="hidden" id="reviewVolunteerUsername">
+                <input type="hidden" id="reviewNeedId">
+                
+                <div class="form-group" style="text-align: center;">
+                    <label class="form-label">Review Rating *</label>
+                    <div class="rating-select">
+                        <input type="radio" id="star5" name="reviewRating" value="5" required><label for="star5" title="5 stars">&#9733;</label>
+                        <input type="radio" id="star4" name="reviewRating" value="4"><label for="star4" title="4 stars">&#9733;</label>
+                        <input type="radio" id="star3" name="reviewRating" value="3"><label for="star3" title="3 stars">&#9733;</label>
+                        <input type="radio" id="star2" name="reviewRating" value="2"><label for="star2" title="2 stars">&#9733;</label>
+                        <input type="radio" id="star1" name="reviewRating" value="1"><label for="star1" title="1 star">&#9733;</label>
+                    </div>
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label" for="reviewComment">Comments & Feedback</label>
+                    <textarea id="reviewComment" class="form-control" placeholder="e.g. Excellent communication, very punctual, and did a great job!" style="min-height:90px;"></textarea>
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                    <button type="submit" class="btn btn-full" style="margin-top:0;">Submit Review</button>
+                    <button type="button" class="btn btn-full" onclick="closeReviewModal()" style="margin-top:0; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:var(--text-main); box-shadow:none;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="js/auth.js"></script>
     <script src="js/api.js"></script>
     <script src="js/app.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Only show + Add Need button if the user is an admin
+            // Only show admin controls if logged in as admin
             if (Auth.isAdmin()) {
                 document.getElementById('addNeedBtn').style.display = 'inline-block';
+                document.getElementById('downloadReportBtn').style.display = 'inline-block';
+            }
+            
+            // Wire up notification toggle
+            const notifBtn = document.getElementById('notificationToggleBtn');
+            if (notifBtn) {
+                notifBtn.onclick = () => toggleNotificationDrawer();
             }
         });
     </script>

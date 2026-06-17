@@ -34,19 +34,76 @@
     <script src="js/auth.js"></script>
     <script src="js/api.js"></script>
     <script>
+        function getVolunteerRatingInfo(volunteer) {
+            const reviews = (volunteer && volunteer.reviews) || [];
+            if (reviews.length === 0) return { avg: "5.0", count: 0, stars: "⭐⭐⭐⭐⭐" };
+            
+            const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
+            const avg = (sum / reviews.length).toFixed(1);
+            const rounded = Math.round(sum / reviews.length);
+            const stars = "⭐".repeat(rounded) + "☆".repeat(5 - rounded);
+            return { avg, count: reviews.length, stars };
+        }
+
+        function getVolunteerBadges(volunteer, needsCount) {
+            const list = [];
+            const skillsLower = ((volunteer && volunteer.skills) || '').toLowerCase();
+            
+            if (needsCount > 0) {
+                list.push({ label: "Helper", class: "badge-helper" });
+            }
+            
+            const ratingInfo = getVolunteerRatingInfo(volunteer);
+            if (needsCount >= 3 || (ratingInfo.count >= 2 && parseFloat(ratingInfo.avg) >= 4.7)) {
+                list.push({ label: "Community Hero", class: "badge-hero" });
+            }
+            
+            if (skillsLower.includes("nurse") || skillsLower.includes("first aid") || skillsLower.includes("medical")) {
+                list.push({ label: "Medical Shield", class: "badge-medical" });
+            }
+            
+            if (skillsLower.includes("driver") || skillsLower.includes("lifting") || skillsLower.includes("driving") || skillsLower.includes("stamina")) {
+                list.push({ label: "Logistics Specialist", class: "badge-logistics" });
+            }
+            
+            return list;
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             try {
-                const volunteers = await API.getVolunteers();
+                const globalData = await API.getGlobalData();
+                const volunteers = globalData.volunteers || [];
+                const needs = globalData.needs || [];
                 const grid = document.getElementById('vGrid');
                 if (volunteers.length === 0) {
                      grid.innerHTML = '<p style="text-align:center; grid-column:1/-1;">No volunteers registered.</p>'; return;
                 }
                 const isGuest = !Auth.getToken();
-                grid.innerHTML = volunteers.map(v => `
+                grid.innerHTML = volunteers.map(v => {
+                    const completedTasksCount = needs.filter(n => 
+                        (n.status === 'completed' || n.status === 'matched') && 
+                        n.assignedVolunteers && 
+                        n.assignedVolunteers.some(av => av.id === v.id)
+                    ).length;
+                    
+                    const ratingInfo = getVolunteerRatingInfo(v);
+                    const badges = getVolunteerBadges(v, completedTasksCount);
+                    const badgeHtml = badges.map(b => `<span class="badge ${b.class}" style="font-size:0.7rem; padding: 2px 8px; margin-right: 4px;">${b.label}</span>`).join('');
+
+                    return `
                     <div class="card" style="display:flex; flex-direction:row; gap:1.5rem; align-items:center; text-align:left; flex-wrap:wrap;">
                         <img src="${v.profilePic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(v.name)}" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:2px solid rgba(255,255,255,0.15); box-shadow: 0 4px 10px rgba(0,0,0,0.3)">
                         <div style="flex-grow:1; min-width:200px">
-                            <h3 style="margin-bottom:0.5rem; color:var(--text-main); font-family:'Outfit'; font-size:1.35rem;">${v.name}</h3>
+                            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.25rem;">
+                                <h3 style="color:var(--text-main); font-family:'Outfit'; font-size:1.35rem;">${v.name}</h3>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <span style="color:#f59e0b; font-weight:700;">⭐ ${ratingInfo.avg}</span>
+                                    <span style="font-size:0.75rem; color:var(--text-light)">(${ratingInfo.count} reviews)</span>
+                                </div>
+                            </div>
+                            <div style="margin-bottom:0.75rem; display:flex; flex-wrap:wrap;">
+                                ${badgeHtml || '<span style="font-size:0.75rem; color:var(--text-light); font-style:italic">No badges earned yet</span>'}
+                            </div>
                             <div style="display:flex; flex-wrap:wrap; gap:0.5rem 1rem; font-size:0.85rem; color:var(--text-light); margin-bottom:0.75rem;">
                                 <span>📍 ${v.currentLocation || 'N/A'}</span>
                                 <span>📞 ${isGuest ? '🔒 Login to View' : (v.phone || 'N/A')}</span>
@@ -58,7 +115,7 @@
                             <div style="font-size:0.85rem; color:var(--text-light); margin-top:0.25rem;"><strong style="color:var(--text-main)">Address:</strong> ${isGuest ? '🔒 Login to View' : (v.address || 'N/A')}</div>
                         </div>
                     </div>
-                `).join('');
+                `}).join('');
             } catch(e) {
                 document.getElementById('vGrid').innerHTML = '<p style="color:red; text-align:center; grid-column:1/-1;">Error loading volunteers.</p>';
             }
